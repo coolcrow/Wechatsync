@@ -28,7 +28,50 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [loading, setLoading] = useState(false)
   const [floatingButtonEnabled, setFloatingButtonEnabled] = useState(false)
   const [serverUrlInput, setServerUrlInput] = useState('')
+  const [miaobiBusy, setMiaobiBusy] = useState(false)
+  const [miaobiMsg, setMiaobiMsg] = useState('')
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const MIAOBI_API = 'https://mp.aibolt.tech'
+  const MIAOBI_WS = 'wss://mp.aibolt.tech/ws-bridge'
+
+  const handleMiaobiSetup = async () => {
+    const username = prompt('妙笔账号用户名（管理台 https://mp.aibolt.tech 的登录账号）')
+    if (!username) return
+    const password = prompt('妙笔账号密码')
+    if (!password) return
+    setMiaobiBusy(true)
+    setMiaobiMsg('正在登录妙笔…')
+    try {
+      const loginResp = await fetch(`${MIAOBI_API}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      if (!loginResp.ok) {
+        const err = await loginResp.json().catch(() => ({} as { detail?: string }))
+        throw new Error(err.detail || `登录失败 (${loginResp.status})`)
+      }
+      const { access_token } = (await loginResp.json()) as { access_token: string }
+      setMiaobiMsg('正在获取同步配置…')
+      const tokenResp = await fetch(`${MIAOBI_API}/api/wechatsync/token`, {
+        headers: { Authorization: `Bearer ${access_token}` },
+      })
+      if (!tokenResp.ok) throw new Error(`获取配置失败 (${tokenResp.status})`)
+      const { token: bridgeToken } = (await tokenResp.json()) as { token: string }
+      await chrome.storage.local.set({
+        mcpEnabled: true,
+        mcpToken: bridgeToken,
+        mcpServerUrl: MIAOBI_WS,
+      })
+      setMiaobiMsg('配置成功，扩展重启中…')
+      setTimeout(() => chrome.runtime.reload(), 800)
+    } catch (e) {
+      setMiaobiMsg(`配置失败: ${(e as Error).message}`)
+    } finally {
+      setMiaobiBusy(false)
+    }
+  }
 
   // 获取状态
   useEffect(() => {
@@ -186,6 +229,23 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                       : '未启用'}
                   </p>
                 </div>
+              </div>
+
+              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                <div>
+                  <p className="text-sm font-medium">妙笔一键配置</p>
+                  <p className="text-xs text-muted-foreground">
+                    用妙笔账号自动配置连接（服务器地址 + Token），无需手动填写
+                  </p>
+                </div>
+                <button
+                  onClick={handleMiaobiSetup}
+                  disabled={miaobiBusy}
+                  className="w-full bg-primary text-primary-foreground text-sm py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-50"
+                >
+                  {miaobiBusy ? '配置中…' : '登录妙笔并自动配置'}
+                </button>
+                {miaobiMsg && <p className="text-xs text-muted-foreground break-all">{miaobiMsg}</p>}
               </div>
 
               <button

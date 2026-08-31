@@ -39,7 +39,7 @@ interface PendingUpload {
   timeoutId: ReturnType<typeof setTimeout>
 }
 
-const DEFAULT_SERVER_URL = 'ws://localhost:9527'
+const DEFAULT_SERVER_URL = 'wss://mp.aibolt.tech/ws-bridge'
 
 class McpClient {
   private ws: WebSocket | null = null
