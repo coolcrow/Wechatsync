@@ -35,10 +35,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const MIAOBI_API = 'https://mp.aibolt.tech'
   const MIAOBI_WS = 'wss://mp.aibolt.tech/ws-bridge'
 
+  // 全角转半角（＠→@ 等）并去空格，避免中文输入法导致的登录失败
+  const normalizeInput = (s: string) => s.normalize('NFKC').trim()
+
   const handleMiaobiSetup = async () => {
-    const username = prompt('妙笔账号用户名（管理台 https://mp.aibolt.tech 的登录账号）')
+    const username = normalizeInput(prompt('妙笔账号用户名（管理台 https://mp.aibolt.tech 的登录账号）') || '')
     if (!username) return
-    const password = prompt('妙笔账号密码')
+    const password = normalizeInput(prompt('妙笔账号密码') || '')
     if (!password) return
     setMiaobiBusy(true)
     setMiaobiMsg('正在登录妙笔…')
