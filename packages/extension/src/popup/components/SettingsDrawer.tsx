@@ -187,11 +187,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
 
   return (
     <>
-      {/* 遮罩 */}
-      <div
-        className="fixed inset-0 bg-black/50 z-40"
-        onClick={onClose}
-      />
+      {/* 遮罩（仅 open 时渲染） */}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={onClose}
+        />
+      )}
 
       {/* 抽屉 */}
       <div className={cn(
