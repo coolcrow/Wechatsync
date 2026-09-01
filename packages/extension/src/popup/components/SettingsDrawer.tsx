@@ -56,6 +56,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         throw new Error(err.detail || `登录失败 (${loginResp.status})`)
       }
       const { access_token } = (await loginResp.json()) as { access_token: string }
+      await chrome.storage.local.set({ miaobiToken: access_token })
       setMiaobiMsg('正在获取同步配置…')
       const tokenResp = await fetch(`${MIAOBI_API}/api/wechatsync/token`, {
         headers: { Authorization: `Bearer ${access_token}` },
