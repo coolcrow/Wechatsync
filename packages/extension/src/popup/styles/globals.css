@@ -4,7 +4,6 @@
 
 @layer base {
   :root {
-    /* 妙笔 · 夜班编辑台 设计令牌 */
     --background: 50 43% 97%;
     --foreground: 38 14% 11%;
     --muted: 45 26% 90%;
@@ -25,69 +24,161 @@
     --destructive-foreground: 40 50% 97%;
     --ring: 7 61% 47%;
     --radius: 0.375rem;
+    --pine: 122 15% 42%;
+    --ochre: 39 59% 44%;
+    --faint: 41 8% 60%;
   }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground;
     width: 380px;
     min-height: 500px;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
 @layer components {
-  /* 印章式状态徽标 */
-  .miaobi-seal {
-    display: inline-flex;
-    align-items: center;
-    padding: 1px 6px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 1px;
-    border-radius: 2px;
+  /* ═══ 印章 ═══ */
+  .mb-seal {
+    display: inline-flex; align-items: center;
+    padding: 1px 6px; font-size: 10px; font-weight: 700;
+    letter-spacing: 1px; border-radius: 2px;
     border: 1.5px solid currentColor;
-    transform: rotate(-1.2deg);
-    line-height: 1.5;
+    transform: rotate(-1.2deg); line-height: 1.5;
   }
-  .miaobi-seal-draft { color: hsl(41 8% 55%); border-style: dashed; }
-  .miaobi-seal-rewritten { color: hsl(39 59% 44%); }
-  .miaobi-seal-published { color: hsl(122 15% 42%); }
-  .miaobi-seal-failed { color: hsl(7 61% 47%); }
+  .mb-seal-draft { color: hsl(var(--faint)); border-style: dashed; }
+  .mb-seal-rewritten { color: hsl(var(--ochre)); }
+  .mb-seal-published { color: hsl(var(--pine)); }
+  .mb-seal-failed { color: hsl(var(--primary)); }
+  .mb-seal-ver {
+    color: hsl(var(--primary)); font-weight: 600; font-size: 9px;
+    border-width: 1px; padding: 0 4px; letter-spacing: .5px;
+  }
 
-  /* 稿纸网格背景 */
-  .miaobi-grid {
+  /* ═══ 稿纸网格 ═══ */
+  .mb-grid {
     background-image:
       linear-gradient(rgba(151,167,154,.12) 1px, transparent 1px),
       linear-gradient(90deg, rgba(151,167,154,.12) 1px, transparent 1px);
     background-size: 24px 24px;
   }
 
-  /* 品牌标题 */
-  .miaobi-brand {
-    font-family: "Noto Serif SC", "Songti SC", serif;
-    letter-spacing: 3px;
+  /* ═══ 品牌 ═══ */
+  .mb-brand { font-family: "Noto Serif SC","Songti SC",serif; letter-spacing: 3px; }
+  .mb-mono { font-family: ui-monospace,"SF Mono",Menlo,monospace; }
+
+  /* ═══ AI 味 ═══ */
+  .mb-flavor { font-family: ui-monospace,"SF Mono",Menlo,monospace; font-size: 10px; font-weight: 600; }
+  .mb-flavor-clean { color: hsl(var(--pine)); }
+  .mb-flavor-light { color: hsl(var(--ochre)); }
+  .mb-flavor-heavy { color: hsl(var(--primary)); }
+
+  /* ═══ 文章卡片 ═══ */
+  .mb-card {
+    background: hsl(var(--card)); border: 1px solid hsl(var(--border));
+    border-radius: 6px; padding: 12px 14px; margin-bottom: 8px;
+    transition: all 160ms ease; cursor: pointer;
+  }
+  .mb-card:hover { border-color: hsl(var(--primary)); transform: translateY(-1px); box-shadow: 0 3px 10px rgba(33,30,25,.06); }
+  .mb-card.mb-expanded { border-color: hsl(var(--primary) / .3); background: hsl(var(--primary) / .03); }
+  .mb-card-title { font-family: "Noto Serif SC","Songti SC",serif; font-size: 13px; font-weight: 600; line-height: 1.4; }
+  .mb-card-meta { display: flex; gap: 8px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+  .mb-card-meta-item { font-size: 10px; color: hsl(var(--muted-foreground)); }
+  .mb-card-actions { display: flex; gap: 6px; margin-top: 10px; padding-top: 8px; border-top: 1px solid hsl(var(--border) / .5); }
+  .mb-card.rewriting { opacity: .6; pointer-events: none; }
+
+  /* ═══ 骨架屏 ═══ */
+  .mb-skel {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border)) 50%, hsl(var(--muted)) 75%);
+    background-size: 200% 100%;
+    animation: mb-shimmer 1.5s infinite;
+    border-radius: 4px;
+  }
+  @keyframes mb-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+  @media (prefers-reduced-motion: reduce) { .mb-skel { animation: none; } }
+  .mb-skel-card { height: 72px; margin-bottom: 8px; border: 1px solid hsl(var(--border)); border-radius: 6px; padding: 12px 14px; }
+  .mb-skel-title { height: 14px; width: 70%; margin-bottom: 8px; }
+  .mb-skel-meta { height: 8px; width: 50%; }
+
+  /* ═══ 空状态 ═══ */
+  .mb-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; gap: 4px; }
+  .mb-empty-title { font-family: "Noto Serif SC","Songti SC",serif; font-size: 14px; letter-spacing: 2px; }
+  .mb-empty-sub { font-size: 11px; color: hsl(var(--muted-foreground)); }
+
+  /* ═══ 按钮 ═══ */
+  .mb-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+    padding: 5px 12px; border: 1px solid hsl(var(--border));
+    border-radius: 6px; background: hsl(var(--card));
+    font-size: 11px; font-weight: 500; color: hsl(var(--foreground));
+    transition: all 160ms ease; cursor: pointer; line-height: 1.4;
+  }
+  .mb-btn:hover { border-color: hsl(var(--foreground) / .3); }
+  .mb-btn:active { transform: scale(.97); }
+  .mb-btn:disabled { opacity: .45; cursor: not-allowed; }
+  .mb-btn-primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); border-color: hsl(var(--primary)); }
+  .mb-btn-primary:hover { background: hsl(var(--primary) / .85); }
+  .mb-btn-sm { padding: 3px 8px; font-size: 10px; }
+
+  /* ═══ 头部 ═══ */
+  .mb-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border-bottom: 1px solid hsl(var(--border));
+  }
+  .mb-header-left { display: flex; align-items: center; gap: 6px; }
+  .mb-header-title { font-family: "Noto Serif SC","Songti SC",serif; font-size: 14px; font-weight: 700; letter-spacing: 2px; }
+  .mb-header-count { font-size: 10px; color: hsl(var(--muted-foreground)); }
+  .mb-header-actions { display: flex; align-items: center; gap: 4px; }
+  .mb-header-btn {
+    display: flex; align-items: center; gap: 3px;
+    padding: 4px 8px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; cursor: pointer;
+    border: none; transition: all 160ms ease;
+  }
+  .mb-header-btn:hover { opacity: .8; }
+  .mb-header-btn-collect { background: hsl(var(--primary) / .08); color: hsl(var(--primary)); }
+  .mb-header-btn-tools { background: hsl(var(--accent) / .06); color: hsl(var(--muted-foreground)); }
+
+  /* ═══ 面板（采集/工具） ═══ */
+  .mb-panel {
+    padding: 12px; border-bottom: 1px solid hsl(var(--border));
+    max-height: 320px; overflow-y: auto; background: hsl(var(--card) / .5);
+  }
+  .mb-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .mb-panel-title { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+  .mb-panel-label { font-size: 10px; font-weight: 600; color: hsl(var(--muted-foreground)); margin-bottom: 4px; display: block; }
+  .mb-panel-input {
+    width: 100%; padding: 5px 8px; font-size: 11px;
+    border: 1px solid hsl(var(--border)); border-radius: 4px;
+    background: hsl(var(--card)); color: hsl(var(--foreground));
+    outline: none; transition: border-color 160ms;
+  }
+  .mb-panel-input:focus { border-color: hsl(var(--primary)); }
+
+  /* ═══ 错误提示 ═══ */
+  .mb-error {
+    margin: 8px 12px; padding: 8px 12px;
+    background: hsl(var(--destructive) / .05);
+    border: 1px solid hsl(var(--destructive) / .2);
+    border-radius: 6px; font-size: 11px; color: hsl(var(--destructive));
   }
 
-  /* AI 味分指示器 */
-  .miaobi-flavor {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 10px;
-    font-weight: 600;
-  }
+  /* ═══ 动画 ═══ */
+  @keyframes mb-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+  .mb-rewriting { animation: mb-pulse 1.5s ease-in-out infinite; }
+  @media (prefers-reduced-motion: reduce) { .mb-rewriting { animation: none; } }
 
-  /* 改写中动画 */
-  @keyframes miaobi-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: .5; }
+  /* ═══ Tab 栏 ═══ */
+  .mb-tab {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 0; font-size: 12px; font-weight: 500;
+    border: none; background: none; cursor: pointer;
+    border-bottom: 2px solid transparent;
+    color: hsl(var(--muted-foreground)); transition: all 160ms;
   }
-  .miaobi-rewriting {
-    animation: miaobi-pulse 1.5s ease-in-out infinite;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .miaobi-rewriting { animation: none; }
-  }
+  .mb-tab:hover { color: hsl(var(--foreground)); }
+  .mb-tab.active { color: hsl(var(--primary)); border-bottom-color: hsl(var(--primary)); }
 }

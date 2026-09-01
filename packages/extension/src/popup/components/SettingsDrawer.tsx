@@ -81,7 +81,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const handleCookieSync = async () => {
     setCookieSyncMsg('正在读取浏览器 Cookie…')
     try {
-      const cookies = await chrome.cookies.getAll({ domain: 'mp.toutiao.com' })
+      const cookies = await chrome.cookies.getAll({ domain: '.toutiao.com' })
       const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
       if (cookieStr.length < 50) {
         throw new Error('未检测到头条登录 Cookie，请先在浏览器中登录 mp.toutiao.com')
