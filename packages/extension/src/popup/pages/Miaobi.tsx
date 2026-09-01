@@ -268,7 +268,7 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
       source: 'extension',
       source_url: d.source_url,
     })
-    toast('已保存到稿件库')
+    setArticles(prev => [...prev])
     loadArticles()
   }
 
