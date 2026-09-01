@@ -77,6 +77,34 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     }
   }
 
+  const [cookieSyncMsg, setCookieSyncMsg] = useState('')
+  const handleCookieSync = async () => {
+    setCookieSyncMsg('正在读取浏览器 Cookie…')
+    try {
+      const cookies = await chrome.cookies.getAll({ domain: 'mp.toutiao.com' })
+      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
+      if (cookieStr.length < 50) {
+        throw new Error('未检测到头条登录 Cookie，请先在浏览器中登录 mp.toutiao.com')
+      }
+      setCookieSyncMsg('正在同步到服务器…')
+      const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
+      if (!miaobiToken) throw new Error('请先完成妙笔一键配置')
+      const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${miaobiToken}`,
+        },
+        body: JSON.stringify({ platform: 'toutiao', cookies: cookieStr }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.detail || `同步失败 (${resp.status})`)
+      setCookieSyncMsg(`✓ ${data.message}——服务器现在可以独立发布头条了`)
+    } catch (e) {
+      setCookieSyncMsg(`同步失败: ${(e as Error).message}`)
+    }
+  }
+
   // 获取状态
   useEffect(() => {
     if (!open) return
@@ -252,6 +280,22 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                   {miaobiBusy ? '配置中…' : '登录妙笔并自动配置'}
                 </button>
                 {miaobiMsg && <p className="text-xs text-muted-foreground break-all">{miaobiMsg}</p>}
+              </div>
+
+              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+                <div>
+                  <p className="text-sm font-medium">头条 Cookie 同步</p>
+                  <p className="text-xs text-muted-foreground">
+                    自动读取浏览器中的头条登录 Cookie，同步到服务器（同步后无需浏览器在线也能发布）
+                  </p>
+                </div>
+                <button
+                  onClick={handleCookieSync}
+                  className="w-full bg-primary/10 text-primary text-sm py-1.5 rounded-md hover:bg-primary/20 border border-primary/30"
+                >
+                  同步头条 Cookie
+                </button>
+                {cookieSyncMsg && <p className="text-xs text-muted-foreground break-all">{cookieSyncMsg}</p>}
               </div>
 
               <button
