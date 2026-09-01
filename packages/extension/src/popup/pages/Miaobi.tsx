@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Settings, Zap, Send, RefreshCw, ChevronRight, BookOpen, Lock } from 'lucide-react'
+import { Settings, Zap, Send, RefreshCw, ChevronRight, BookOpen, Lock, Download, X } from 'lucide-react'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 import { cn } from '@/lib/utils'
 
 const MIAOBI_API = 'https://mp.aibolt.tech'
+const CATEGORIES = ['情感', '生活', '职场', '育儿', '家庭', '科技']
 
 interface Article {
   id: number
@@ -22,6 +23,13 @@ interface PlatformVersion {
   attempt: number
   ai_flavor_score: number | null
   ai_flavor_band: string | null
+}
+
+interface CollectData {
+  title: string
+  content: string
+  source_url: string
+  category: string
 }
 
 const STATUS_MAP: Record<string, string> = {
@@ -128,6 +136,119 @@ function ArticleCard({ article, onRewrite, onSync, rewriting }: {
   )
 }
 
+function CollectPanel({ onSave, onClose }: { onSave: (d: CollectData) => Promise<void>; onClose: () => void }) {
+  const [data, setData] = useState<CollectData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const extract = async () => {
+      try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+        if (!tab?.id) throw new Error('无法获取当前页面')
+        if (tab.url?.startsWith('chrome://')) throw new Error('浏览器内部页面不支持采集')
+        const response = await chrome.tabs.sendMessage(tab.id, { type: 'EXTRACT_ARTICLE' })
+        if (response?.article?.title && response?.article?.content) {
+          const art = response.article
+          const suggested = suggestCategory(art.title + ' ' + art.content?.substring(0, 200))
+          setData({
+            title: art.title.substring(0, 100),
+            content: art.content,
+            source_url: tab.url || '',
+            category: suggested,
+          })
+        } else {
+          throw new Error('未能提取文章内容，请确认当前页面是一篇文章')
+        }
+      } catch (e) {
+        setError((e as Error).message)
+      } finally {
+        setLoading(false)
+      }
+    }
+    extract()
+  }, [])
+
+  const suggestCategory = (text: string): string => {
+    if (/情感|爱情|婚姻|夫妻|分手|离婚|恋爱/.test(text)) return '情感'
+    if (/职场|工作|加班|裁员|老板|同事|求职/.test(text)) return '职场'
+    if (/育儿|孩子|亲子|教育|家长|宝宝/.test(text)) return '育儿'
+    if (/家庭|父母|婆媳|亲情|家风/.test(text)) return '家庭'
+    if (/科技|AI|编程|代码|互联网|数码/.test(text)) return '科技'
+    return '生活'
+  }
+
+  const handleSave = async () => {
+    if (!data?.title || !data?.content) return
+    setSaving(true)
+    try {
+      await onSave(data)
+      onClose()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div style={{ padding: '12px', borderBottom: '1px solid hsl(var(--border))' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <Download className="w-3.5 h-3.5 text-primary" /> 采集文章
+        </span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}>
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      {loading && <div style={{ textAlign: 'center', padding: '16px', fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>正在提取页面内容…</div>}
+      {error && (
+        <div style={{ padding: '8px 12px', background: 'hsl(var(--destructive) / 0.05)', borderRadius: '6px', fontSize: '11px', color: 'hsl(var(--destructive))' }}>
+          {error}
+          <button onClick={onClose} style={{ marginLeft: '8px', background: 'none', border: 'none', color: 'inherit', fontWeight: 600, cursor: 'pointer' }}>关闭</button>
+        </div>
+      )}
+      {data && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div>
+            <label style={{ fontSize: '10px', fontWeight: 600, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: '2px' }}>标题</label>
+            <input
+              value={data.title}
+              onChange={(e) => setData({ ...data, title: e.target.value })}
+              style={{ width: '100%', padding: '6px 10px', fontSize: '12px', border: '1px solid hsl(var(--border))', borderRadius: '6px', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: '2px' }}>分类</label>
+              <select
+                value={data.category}
+                onChange={(e) => setData({ ...data, category: e.target.value })}
+                style={{ width: '100%', padding: '6px 8px', fontSize: '12px', border: '1px solid hsl(var(--border))', borderRadius: '6px', background: 'hsl(var(--card))', color: 'hsl(var(--foreground))' }}
+              >
+                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div style={{ flex: 2 }}>
+              <label style={{ fontSize: '10px', fontWeight: 600, color: 'hsl(var(--muted-foreground))', display: 'block', marginBottom: '2px' }}>字数</label>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', fontFamily: 'monospace', lineHeight: '2' }}>{data.content.length} 字</span>
+            </div>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving || !data.title}
+            className="w-full bg-primary text-primary-foreground text-sm py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-50"
+            style={{ fontSize: '12px', fontWeight: 600, padding: '6px', cursor: 'pointer', border: 'none' }}
+          >
+            {saving ? '保存中…' : '保存到稿件库'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }) {
   const [articles, setArticles] = useState<Article[]>([])
   const [loading, setLoading] = useState(true)
@@ -136,7 +257,20 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
   const [rewritingIds, setRewritingIds] = useState<Set<number>>(new Set())
   const [syncingId, setSyncingId] = useState<number | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [showCollect, setShowCollect] = useState(false)
   const pollRef = useRef<Map<number, ReturnType<typeof setInterval>>>(new Map())
+
+  const handleCollectSave = async (d: CollectData) => {
+    await api('POST', '/api/articles', {
+      title: d.title,
+      content: d.content,
+      category: d.category,
+      source: 'extension',
+      source_url: d.source_url,
+    })
+    toast('已保存到稿件库')
+    loadArticles()
+  }
 
   const checkAuth = useCallback(async () => {
     const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
@@ -307,10 +441,20 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
           <h2 className="miaobi-brand text-sm font-bold">稿件库</h2>
           <span className="text-[10px] text-muted-foreground">{articles.length} 篇</span>
         </div>
-        <button onClick={loadArticles} className="p-1 hover:bg-muted rounded" title="刷新">
-          <RefreshCw className={cn('w-3.5 h-3.5 text-muted-foreground', loading && 'animate-spin')} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowCollect(!showCollect)}
+            className="flex items-center gap-1 px-2 py-1 rounded bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20"
+            title="采集当前页面的文章到稿件库"
+          >
+            <Download className="w-3 h-3" /> 采集
+          </button>
+          <button onClick={loadArticles} className="p-1 hover:bg-muted rounded" title="刷新">
+            <RefreshCw className={cn('w-3.5 h-3.5 text-muted-foreground', loading && 'animate-spin')} />
+          </button>
+        </div>
       </div>
+      {showCollect && <CollectPanel onSave={handleCollectSave} onClose={() => setShowCollect(false)} />}
 
       {/* 错误提示 */}
       {error && (
