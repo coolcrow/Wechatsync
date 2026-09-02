@@ -1014,6 +1014,7 @@ function openEditor(article: ExtractedArticle, platforms: any[], selectedPlatfor
   // 等待 iframe 准备好后发送数据
   const handleEditorReady = (event: MessageEvent) => {
     try {
+      if (typeof event.data === 'string' && !event.data.startsWith('{')) return
       const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
       if (data.type === 'EDITOR_READY') {
         sendDataToEditor(article, platforms, selectedPlatformIds)
@@ -1103,6 +1104,7 @@ function preprocessForMultiplePlatformsLocal(
  */
 window.addEventListener('message', async (event) => {
   try {
+    if (typeof event.data === 'string' && !event.data.startsWith('{')) return
     const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data
 
     if (data.type === 'CLOSE_EDITOR') {
