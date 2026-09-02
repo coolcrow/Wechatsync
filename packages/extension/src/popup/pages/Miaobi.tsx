@@ -412,7 +412,14 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
       <div className="flex flex-col h-full">
         <div className="mb-header">
           <div className="mb-header-left">
-            <BookOpen className="w-4 h-4" style={{ color: 'hsl(var(--primary))' }} />
+            <span
+              style={{
+                width: 20, height: 20, background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))',
+                fontFamily: '"Noto Serif SC","Songti SC",serif', fontSize: 12, fontWeight: 700,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                borderRadius: 3, transform: 'rotate(6deg)', flexShrink: 0,
+              }}
+            >妙</span>
             <h2 className="mb-header-title">稿件库</h2>
             <span className="mb-header-count">{articles.length} 篇</span>
           </div>

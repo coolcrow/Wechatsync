@@ -927,12 +927,8 @@ function removeFloatingButton() {
   }
 }
 
-// 初始化：读取设置决定是否注入
-chrome.storage.local.get('floatingButtonEnabled', (result) => {
-  if (result.floatingButtonEnabled) {
-    injectFloatingButton()
-  }
-})
+// 初始化：直接同步功能已下线，悬浮按钮不再注入（存量开关仅作记录）
+chrome.storage.local.get('floatingButtonEnabled', () => {})
 
 // 监听设置变化，实时响应
 chrome.storage.onChanged.addListener((changes) => {
