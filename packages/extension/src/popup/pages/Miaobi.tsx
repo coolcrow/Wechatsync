@@ -433,6 +433,9 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
             <button className="p-1.5 hover:bg-muted rounded cursor-pointer bg-transparent border-none" onClick={loadArticles} title="刷新">
               <RefreshCw className={`w-3.5 h-3.5 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
             </button>
+            <button className="p-1.5 hover:bg-muted rounded cursor-pointer bg-transparent border-none" onClick={() => setSettingsOpen(true)} title="设置">
+              <Settings className="w-3.5 h-3.5 text-muted-foreground" />
+            </button>
           </div>
         </div>
         {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}

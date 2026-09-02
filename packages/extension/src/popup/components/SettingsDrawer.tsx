@@ -33,6 +33,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [miaobiUser, setMiaobiUser] = useState('')
   const [miaobiPass, setMiaobiPass] = useState('')
   const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
+  const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -164,6 +165,11 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     // 悬浮按钮设置
     chrome.storage.local.get('floatingButtonEnabled', (result) => {
       setFloatingButtonEnabled(result.floatingButtonEnabled ?? false)
+    })
+
+    // 平台登录状态
+    chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => {
+      if (r && !r.error) setPlatforms(r.platforms || [])
     })
 
     // 妙笔登录态探测
@@ -442,6 +448,44 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* 平台登录状态 */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-muted-foreground">平台登录状态</h3>
+              <span className="text-xs text-muted-foreground">
+                {platforms.filter(p => p.isAuthenticated).length}/{platforms.length} 已登录
+              </span>
+            </div>
+            {platforms.length === 0 ? (
+              <p className="text-xs text-muted-foreground">检测中…</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {platforms.map(p => (
+                  <span
+                    key={p.id}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px]"
+                    style={{
+                      borderColor: p.isAuthenticated ? 'hsl(var(--pine) / .4)' : 'hsl(var(--border))',
+                      color: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground))',
+                      background: p.isAuthenticated ? 'hsl(var(--pine) / .07)' : 'transparent',
+                    }}
+                    title={p.isAuthenticated ? `已登录${p.username ? `：${p.username}` : ''}` : '未登录——浏览器访问该平台官网登录后自动亮起'}
+                  >
+                    <span
+                      style={{
+                        width: 6, height: 6, borderRadius: '50%',
+                        background: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground) / .4)',
+                        display: 'inline-block',
+                      }}
+                    />
+                    {p.name}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">未登录的平台：浏览器访问其官网登录后自动亮起，无需在此配置</p>
           </div>
 
           {/* CMS 账户 */}
