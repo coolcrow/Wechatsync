@@ -34,6 +34,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [miaobiPass, setMiaobiPass] = useState('')
   const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
+  const [toutiaoLoggedIn, setToutiaoLoggedIn] = useState<boolean | null>(null)
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -170,6 +171,10 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     // 平台登录状态
     chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => {
       if (r && !r.error) setPlatforms(r.platforms || [])
+    })
+    // 头条无浏览器适配器（服务器 Cookie 直发），以浏览器会话判定
+    chrome.cookies.getAll({ domain: '.toutiao.com' }, (cookies) => {
+      setToutiaoLoggedIn(cookies.some(c => c.name === 'sessionid' && c.value))
     })
 
     // 妙笔登录态探测
@@ -455,13 +460,31 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-muted-foreground">平台登录状态</h3>
               <span className="text-xs text-muted-foreground">
-                {platforms.filter(p => p.isAuthenticated).length}/{platforms.length} 已登录
+                {(platforms.filter(p => p.isAuthenticated).length + (toutiaoLoggedIn ? 1 : 0))}/{platforms.length + 1} 已登录
               </span>
             </div>
             {platforms.length === 0 ? (
               <p className="text-xs text-muted-foreground">检测中…</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px]"
+                  style={{
+                    borderColor: toutiaoLoggedIn ? 'hsl(var(--pine) / .4)' : 'hsl(var(--border))',
+                    color: toutiaoLoggedIn ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground))',
+                    background: toutiaoLoggedIn ? 'hsl(var(--pine) / .07)' : 'transparent',
+                  }}
+                  title={toutiaoLoggedIn ? '浏览器已登录 mp.toutiao.com——点下方「同步头条 Cookie」让服务器直发就绪' : '未登录——浏览器访问 mp.toutiao.com 登录后亮起'}
+                >
+                  <span
+                    style={{
+                      width: 6, height: 6, borderRadius: '50%',
+                      background: toutiaoLoggedIn ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground) / .4)',
+                      display: 'inline-block',
+                    }}
+                  />
+                  今日头条
+                </span>
                 {platforms.map(p => (
                   <span
                     key={p.id}
