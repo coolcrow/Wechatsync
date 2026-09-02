@@ -135,6 +135,23 @@ function CollectPanel({ onSave, onClose }: { onSave: (d: CollectData) => Promise
             : /家庭|父母|婆媳/.test(text) ? '家庭'
             : /科技|AI|编程/.test(text) ? '科技' : '生活'
           setData({ title: art.title.substring(0, 100), content: art.content, source_url: tab.url || '', category: suggested })
+          // AI 分类精化（5 秒超时静默降级，保留本地猜测）
+          try {
+            const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
+            if (miaobiToken) {
+              const ctl = new AbortController()
+              const timer = setTimeout(() => ctl.abort(), 5000)
+              const r = await fetch(`${MIAOBI_API}/api/articles/classify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${miaobiToken}` },
+                body: JSON.stringify({ title: art.title, content: (art.content || '').substring(0, 1500) }),
+                signal: ctl.signal,
+              })
+              clearTimeout(timer)
+              const d = await r.json()
+              if (r.ok && d.category) setData(prev => (prev ? { ...prev, category: d.category } : prev))
+            }
+          } catch { /* 保留本地猜测 */ }
         } else {
           throw new Error('未能提取文章内容')
         }
