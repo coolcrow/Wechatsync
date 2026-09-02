@@ -30,6 +30,9 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [serverUrlInput, setServerUrlInput] = useState('')
   const [miaobiBusy, setMiaobiBusy] = useState(false)
   const [miaobiMsg, setMiaobiMsg] = useState('')
+  const [miaobiUser, setMiaobiUser] = useState('')
+  const [miaobiPass, setMiaobiPass] = useState('')
+  const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -39,10 +42,10 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const normalizeInput = (s: string) => s.normalize('NFKC').trim()
 
   const handleMiaobiSetup = async () => {
-    const username = normalizeInput(prompt('妙笔账号用户名（管理台 https://mp.aibolt.tech 的登录账号）') || '')
-    if (!username) return
-    const password = normalizeInput(prompt('妙笔账号密码') || '')
-    if (!password) return
+    const username = normalizeInput(miaobiUser)
+    if (!username) return setMiaobiMsg('请输入用户名')
+    const password = normalizeInput(miaobiPass)
+    if (!password) return setMiaobiMsg('请输入密码')
     setMiaobiBusy(true)
     setMiaobiMsg('正在登录妙笔…')
     try {
@@ -68,6 +71,9 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         mcpToken: bridgeToken,
         mcpServerUrl: MIAOBI_WS,
       })
+      await chrome.storage.local.set({ miaobiUser: username })
+      setMiaobiPass('')
+      setMiaobiAccount(username)
       setMiaobiMsg('配置成功，扩展重启中…')
       setTimeout(() => chrome.runtime.reload(), 800)
     } catch (e) {
@@ -105,6 +111,34 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     }
   }
 
+  const [wechatSyncMsg, setWechatSyncMsg] = useState('')
+  const handleWechatSync = async () => {
+    setWechatSyncMsg('正在读取公众号登录态…')
+    try {
+      const cookies = await chrome.cookies.getAll({ domain: 'mp.weixin.qq.com' })
+      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
+      if (cookieStr.length < 50) {
+        throw new Error('未检测到公众号登录 Cookie，请先在浏览器中扫码登录 mp.weixin.qq.com')
+      }
+      setWechatSyncMsg('正在验证并同步到服务器…')
+      const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
+      if (!miaobiToken) throw new Error('请先完成妙笔一键配置')
+      const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${miaobiToken}`,
+        },
+        body: JSON.stringify({ platform: 'wechat', cookies: cookieStr }),
+      })
+      const data = await resp.json()
+      if (!resp.ok) throw new Error(data.detail || `同步失败 (${resp.status})`)
+      setWechatSyncMsg(`✓ ${data.message}——公众号 Cookie 直发已就绪`)
+    } catch (e) {
+      setWechatSyncMsg(`同步失败: ${(e as Error).message}`)
+    }
+  }
+
   // 获取状态
   useEffect(() => {
     if (!open) return
@@ -130,6 +164,22 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     // 悬浮按钮设置
     chrome.storage.local.get('floatingButtonEnabled', (result) => {
       setFloatingButtonEnabled(result.floatingButtonEnabled ?? false)
+    })
+
+    // 妙笔登录态探测
+    chrome.storage.local.get('miaobiToken', async ({ miaobiToken }) => {
+      if (!miaobiToken) { setMiaobiAccount(null); return }
+      try {
+        const r = await fetch(`${MIAOBI_API}/api/auth/me`, { headers: { Authorization: `Bearer ${miaobiToken}` } })
+        if (r.ok) {
+          const me = await r.json()
+          setMiaobiAccount(me.username || '已登录')
+          chrome.storage.local.set({ miaobiUser: me.username || '' })
+        } else {
+          setMiaobiAccount(null)
+          setMiaobiMsg('登录已过期，请重新登录')
+        }
+      } catch { setMiaobiAccount('已登录') }
     })
   }, [open])
 
@@ -231,7 +281,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       )}>
         {/* 头部 */}
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="font-semibold">设置</h2>
+          <h2 className="font-semibold" style={{ fontFamily: '"Noto Serif SC","Songti SC",serif', letterSpacing: 2 }}>设置</h2>
           <button
             onClick={onClose}
             className="p-1 rounded hover:bg-muted"
@@ -246,7 +296,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground">同步桥接</h3>
 
-            <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-card">
               <div className="flex items-center gap-2">
                 {mcpStatus.connected ? (
                   <PlugZap className="w-5 h-5 text-green-500" />
@@ -264,25 +314,76 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                   </p>
                 </div>
               </div>
+              <button
+                onClick={toggleMcp}
+                disabled={loading}
+                className={cn(
+                  'relative w-11 h-6 rounded-full transition-colors shrink-0',
+                  mcpStatus.enabled ? 'bg-primary' : 'bg-muted-foreground/30',
+                  loading && 'opacity-50'
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
+                    mcpStatus.enabled ? 'translate-x-6' : 'translate-x-1'
+                  )}
+                />
+              </button>
+            </div>
 
-              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+            <div className="p-3 border rounded-lg space-y-2 bg-card">
                 <div>
-                  <p className="text-sm font-medium">妙笔一键配置</p>
-                  <p className="text-xs text-muted-foreground">
-                    用妙笔账号自动配置连接（服务器地址 + Token），无需手动填写
-                  </p>
+                  <p className="text-sm font-medium" style={{ fontFamily: '"Noto Serif SC","Songti SC",serif', letterSpacing: 1 }}>妙笔账号</p>
                 </div>
-                <button
-                  onClick={handleMiaobiSetup}
-                  disabled={miaobiBusy}
-                  className="w-full bg-primary text-primary-foreground text-sm py-1.5 rounded-md hover:bg-primary/90 disabled:opacity-50"
-                >
-                  {miaobiBusy ? '配置中…' : '登录妙笔并自动配置'}
-                </button>
+                {miaobiAccount ? (
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs" style={{ color: 'hsl(var(--pine))' }}>✓ 已登录：{miaobiAccount}</p>
+                    <button
+                      onClick={async () => {
+                        await chrome.storage.local.remove('miaobiToken')
+                        setMiaobiAccount(null)
+                        setMiaobiMsg('已退出登录')
+                      }}
+                      className="text-xs text-muted-foreground hover:text-foreground underline bg-transparent border-none cursor-pointer p-0"
+                    >
+                      退出
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      value={miaobiUser}
+                      onChange={(e) => setMiaobiUser(e.target.value)}
+                      placeholder="用户名（管理台登录账号）"
+                      className="w-full text-sm px-2.5 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1"
+                      style={{ borderColor: 'hsl(var(--border))' }}
+                      autoComplete="username"
+                    />
+                    <input
+                      value={miaobiPass}
+                      onChange={(e) => setMiaobiPass(e.target.value)}
+                      type="password"
+                      placeholder="密码"
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleMiaobiSetup() }}
+                      className="w-full text-sm px-2.5 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1"
+                      style={{ borderColor: 'hsl(var(--border))' }}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      onClick={handleMiaobiSetup}
+                      disabled={miaobiBusy}
+                      className="w-full text-sm py-1.5 rounded-md disabled:opacity-50"
+                      style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
+                    >
+                      {miaobiBusy ? '配置中…' : '登录并自动配置'}
+                    </button>
+                  </>
+                )}
                 {miaobiMsg && <p className="text-xs text-muted-foreground break-all">{miaobiMsg}</p>}
               </div>
 
-              <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+              <div className="p-3 border rounded-lg space-y-2 bg-card">
                 <div>
                   <p className="text-sm font-medium">头条 Cookie 同步</p>
                   <p className="text-xs text-muted-foreground">
@@ -298,23 +399,23 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 {cookieSyncMsg && <p className="text-xs text-muted-foreground break-all">{cookieSyncMsg}</p>}
               </div>
 
-              <button
-                onClick={toggleMcp}
-                disabled={loading}
-                className={cn(
-                  'relative w-11 h-6 rounded-full transition-colors',
-                  mcpStatus.enabled ? 'bg-primary' : 'bg-muted-foreground/30',
-                  loading && 'opacity-50'
-                )}
-              >
-                <span
-                  className={cn(
-                    'absolute top-1 w-4 h-4 rounded-full bg-white transition-transform',
-                    mcpStatus.enabled ? 'translate-x-6' : 'translate-x-1'
-                  )}
-                />
-              </button>
-            </div>
+              <div className="space-y-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-medium">微信公众号 Cookie</p>
+                    <p className="text-xs text-muted-foreground">
+                      扫码登录 mp.weixin.qq.com 后同步，服务器即可免配置直发公众号草稿箱；多账号换登后逐个同步。
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleWechatSync}
+                  className="w-full bg-primary/10 text-primary text-sm py-1.5 rounded-md hover:bg-primary/20 border border-primary/30"
+                >
+                  同步公众号 Cookie
+                </button>
+                {wechatSyncMsg && <p className="text-xs text-muted-foreground break-all">{wechatSyncMsg}</p>}
+              </div>
 
             {mcpStatus.enabled && (
               <div className="space-y-2">

@@ -268,6 +268,7 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [showCollect, setShowCollect] = useState(false)
   const [showTools, setShowTools] = useState(false)
+  const [setupHint, setSetupHint] = useState<{ wechat: boolean; toutiao: boolean } | null>(null)
   const pollRef = useRef<Map<number, ReturnType<typeof setInterval>>>(new Map())
 
   const checkAuth = useCallback(async () => {
@@ -285,13 +286,41 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
     finally { setLoading(false) }
   }, [])
 
+  const checkSetup = useCallback(async () => {
+    try {
+      const accs = await api('GET', '/api/accounts')
+      const has = (plat: string, mode?: string) =>
+        (accs || []).some((a: { platform: string; mode?: string }) =>
+          a.platform === plat && (!mode || a.mode === mode))
+      setSetupHint({ wechat: !has('wechat', 'cookie'), toutiao: !has('toutiao') })
+    } catch { setSetupHint(null) }
+  }, [])
+
+  const syncCookieFor = useCallback(async (platform: 'wechat' | 'toutiao') => {
+    const domain = platform === 'wechat' ? 'mp.weixin.qq.com' : '.toutiao.com'
+    const cookies = await chrome.cookies.getAll({ domain })
+    const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
+    if (cookieStr.length < 50)
+      throw new Error(platform === 'wechat' ? '未检测到公众号登录，请先扫码登录 mp.weixin.qq.com' : '未检测到头条登录，请先登录 mp.toutiao.com')
+    const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
+    if (!miaobiToken) throw new Error('请先登录妙笔账号')
+    const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${miaobiToken}` },
+      body: JSON.stringify({ platform, cookies: cookieStr }),
+    })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data.detail || `同步失败 (${resp.status})`)
+    return data.message as string
+  }, [])
+
   useEffect(() => {
     const init = async () => {
       const ok = await checkAuth()
-      if (ok) await loadArticles(); else setLoading(false)
+      if (ok) { await loadArticles(); await checkSetup() } else setLoading(false)
     }
     init()
-  }, [checkAuth, loadArticles])
+  }, [checkAuth, loadArticles, checkSetup])
 
   const pollRewrite = useCallback((id: number) => {
     setRewritingIds(p => new Set(p).add(id))
@@ -402,6 +431,38 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
         {showTools && <ToolsPanel onClose={() => setShowTools(false)} />}
         {showCollect && <CollectPanel onSave={handleCollectSave} onClose={() => setShowCollect(false)} />}
 
+        {setupHint && (setupHint.wechat || setupHint.toutiao) && (
+          <div className="mx-3 mt-2 p-2 rounded border flex items-center gap-2 text-[11px]" style={{ borderColor: 'hsl(var(--ochre) / .5)', background: 'hsl(var(--ochre) / .07)' }}>
+            <span style={{ color: 'hsl(var(--ochre))', fontWeight: 600, flexShrink: 0 }}>让直发就绪</span>
+            {setupHint.wechat && (
+              <button
+                className="mb-btn mb-btn-sm"
+                style={{ color: 'hsl(var(--ochre))', borderColor: 'hsl(var(--ochre) / .6)' }}
+                onClick={async (e) => {
+                  const btn = e.currentTarget
+                  btn.disabled = true; btn.textContent = '同步中…'
+                  try { const m = await syncCookieFor('wechat'); btn.textContent = '✓ ' + m.slice(0, 18) }
+                  catch (err) { btn.textContent = '重试'; alert((err as Error).message) }
+                  btn.disabled = false; setTimeout(checkSetup, 600)
+                }}
+              >同步公众号 Cookie</button>
+            )}
+            {setupHint.toutiao && (
+              <button
+                className="mb-btn mb-btn-sm"
+                style={{ color: 'hsl(var(--ochre))', borderColor: 'hsl(var(--ochre) / .6)' }}
+                onClick={async (e) => {
+                  const btn = e.currentTarget
+                  btn.disabled = true; btn.textContent = '同步中…'
+                  try { const m = await syncCookieFor('toutiao'); btn.textContent = '✓ ' + m.slice(0, 18) }
+                  catch (err) { btn.textContent = '重试'; alert((err as Error).message) }
+                  btn.disabled = false; setTimeout(checkSetup, 600)
+                }}
+              >同步头条 Cookie</button>
+            )}
+            <button className="ml-auto bg-transparent border-none cursor-pointer text-muted-foreground" style={{ fontSize: 13 }} onClick={() => setSetupHint(null)} title="忽略">×</button>
+          </div>
+        )}
         {error && (
           <div className="mb-error">{error}<button className="float-right font-bold bg-transparent border-none cursor-pointer" onClick={() => setError(null)}>×</button></div>
         )}

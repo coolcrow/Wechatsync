@@ -13,7 +13,22 @@ function TabBar() {
   const isMiaobi = location.pathname === '/miaobi'
 
   return (
-    <div className="flex border-b border-border bg-background sticky top-0 z-10">
+    <div className="flex items-stretch border-b border-border bg-background sticky top-0 z-10">
+      <div
+        className="flex items-center justify-center w-9 shrink-0 border-r border-border"
+        title="妙笔"
+      >
+        <span
+          style={{
+            width: 20, height: 20, background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))',
+            fontFamily: '"Noto Serif SC","Songti SC",serif', fontSize: 12, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 3, transform: 'rotate(6deg)',
+          }}
+        >
+          妙
+        </span>
+      </div>
       <button
         onClick={() => navigate('/')}
         className={cn(
@@ -24,7 +39,7 @@ function TabBar() {
         )}
       >
         <Globe className="w-3.5 h-3.5" />
-        页面同步
+        <span style={{ fontFamily: '"Noto Serif SC","Songti SC",serif', letterSpacing: 1 }}>页面同步</span>
       </button>
       <button
         onClick={() => navigate('/miaobi')}
@@ -36,7 +51,7 @@ function TabBar() {
         )}
       >
         <BookOpen className="w-3.5 h-3.5" />
-        妙笔稿件库
+        <span style={{ fontFamily: '"Noto Serif SC","Songti SC",serif', letterSpacing: 1 }}>妙笔稿件库</span>
       </button>
     </div>
   )
