@@ -155,6 +155,24 @@ class McpClient {
   }
 
   /**
+   * 心跳保活：MV3 service worker 约 30 秒空闲即被杀，WS 随之中断。
+   * 由 background 的 mcp_ws_keepalive alarm 每 30 秒调用：
+   * 连接活着 → 发 ping（桥接回 pong，WS 收发流量都会重置 SW 空闲计时）；
+   * 连接断了 → 立即补一次重连。
+   */
+  heartbeat(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      try {
+        this.ws.send(JSON.stringify({ id: `ping-${Date.now()}`, method: 'ping' }))
+      } catch (error) {
+        logger.debug('Keepalive ping failed:', error)
+      }
+    } else {
+      this.connect()
+    }
+  }
+
+  /**
    * 断开连接
    */
   disconnect(): void {
@@ -263,6 +281,10 @@ class McpClient {
   private async handleMessage(data: string): Promise<void> {
     try {
       const message: RequestMessage = JSON.parse(data)
+      if (!message.method) {
+        // 无 method 的帧是桥接的 pong 等响应：无需处理，收到即已续命 SW
+        return
+      }
       logger.debug('Received:', message.method)
 
       let result: unknown
@@ -562,11 +584,13 @@ export const mcpClient = new McpClient()
 
 // 启动连接（在 background 中调用）
 export function startMcpClient(): void {
+  chrome.alarms.create('mcp_ws_keepalive', { periodInMinutes: 0.5 })
   mcpClient.resetReconnect()
 }
 
 // 停止连接
 export function stopMcpClient(): void {
+  chrome.alarms.clear('mcp_ws_keepalive')
   mcpClient.disconnect()
 }
 

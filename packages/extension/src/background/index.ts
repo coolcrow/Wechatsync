@@ -1222,6 +1222,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'remote_config_fetch') {
     fetchRemoteConfig().catch(() => {})
   }
+  if (alarm.name === 'mcp_ws_keepalive') {
+    mcpClient.heartbeat()
+  }
 })
 
 // 首次启动时也追踪一次增长指标

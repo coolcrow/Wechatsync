@@ -498,7 +498,17 @@ export class ExtensionBridge {
    */
   private handleMessage(data: string): void {
     try {
-      const message: ResponseMessage = JSON.parse(data)
+      const message = JSON.parse(data) as ResponseMessage & { method?: string }
+
+      // 插件心跳：静默回 pong（保持双方 WS 活跃，无 pending 需求）
+      if (message.method === 'ping') {
+        try {
+          this.client?.send(JSON.stringify({ id: message.id, result: 'pong' }))
+        } catch {
+          // 发送失败说明连接将关闭，交给 close 事件处理
+        }
+        return
+      }
 
       const pending = this.pendingRequests.get(message.id)
       if (!pending) {
