@@ -37,6 +37,33 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [cookiePlatforms, setCookiePlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean }[]>([])
   const [syncedIds, setSyncedIds] = useState<Set<string>>(new Set())
   const [verifying, setVerifying] = useState(false)
+
+  const L2_IDS = ['xiaohongshu', 'zhihu', 'x', 'weibo', 'douyin']
+
+  const renderPlatChip = (p: { id: string; name: string; isAuthenticated: boolean; username?: string }) => (
+    <span
+      key={p.id}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px]"
+      style={{
+        borderColor: p.isAuthenticated ? 'hsl(var(--pine) / .4)' : 'hsl(var(--border))',
+        color: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground))',
+        background: p.isAuthenticated ? 'hsl(var(--pine) / .07)' : 'transparent',
+      }}
+      title={p.isAuthenticated ? `已登录${p.username ? `：${p.username}` : ''}` : '未登录——浏览器访问该平台官网登录后自动亮起'}
+    >
+      <span
+        style={{
+          width: 6, height: 6, borderRadius: '50%',
+          background: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground) / .4)',
+          display: 'inline-block',
+        }}
+      />
+      {p.name}
+      {syncedIds.has(p.id) && (
+        <span style={{ fontSize: 9, fontWeight: 600, marginLeft: 2, opacity: 0.8 }}>↺</span>
+      )}
+    </span>
+  )
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -123,6 +150,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       cnblogs: '博客园', cto51: '51CTO', douban: '豆瓣', eastmoney: '东方财富',
       imooc: '慕课网', oschina: '开源中国', segmentfault: '思否', sohu: '搜狐号',
       woshipm: '人人都是产品经理', xueqiu: '雪球', yuque: '语雀',
+      douyin: '抖音', xiaohongshu: '小红书', x: 'X / Twitter',
     }
     const DOMAIN_MAP: Record<string, string> = {
       weixin: 'mp.weixin.qq.com',
@@ -145,6 +173,8 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       xueqiu: '.xueqiu.com',
       yuque: '.yuque.com',
       douyin: '.douyin.com',
+      xiaohongshu: '.xiaohongshu.com',
+      x: '.x.com',
     }
     ;(async () => {
       // Phase 1：Cookie 探测 → 秒出首屏
@@ -463,32 +493,20 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             {platforms.length === 0 ? (
               <p className="text-xs text-muted-foreground">检测中…</p>
             ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {platforms.map(p => (
-                  <span
-                    key={p.id}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px]"
-                    style={{
-                      borderColor: p.isAuthenticated ? 'hsl(var(--pine) / .4)' : 'hsl(var(--border))',
-                      color: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground))',
-                      background: p.isAuthenticated ? 'hsl(var(--pine) / .07)' : 'transparent',
-                    }}
-                    title={p.isAuthenticated ? `已登录${p.username ? `：${p.username}` : ''}` : '未登录——浏览器访问该平台官网登录后自动亮起'}
-                  >
-                    <span
-                      style={{
-                        width: 6, height: 6, borderRadius: '50%',
-                        background: p.isAuthenticated ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground) / .4)',
-                        display: 'inline-block',
-                      }}
-                    />
-                    {p.name}
-                    {syncedIds.has(p.id) && (
-                      <span style={{ fontSize: 9, fontWeight: 600, marginLeft: 2, opacity: 0.8 }}>↺</span>
-                    )}
-                  </span>
-                ))}
-              </div>
+              <>
+                <div>
+                  <p style={{ fontSize: 10, color: 'hsl(var(--muted-foreground))', marginBottom: 4 }}>母稿直发</p>
+                  <div className="flex flex-wrap gap-1.5" style={{ marginBottom: 8 }}>
+                    {platforms.filter(p => !L2_IDS.includes(p.id)).map(renderPlatChip)}
+                  </div>
+                </div>
+                <div>
+                  <p style={{ fontSize: 10, color: 'hsl(var(--ochre))', marginBottom: 4 }}>AI 平台版（每平台特化改写）</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {platforms.filter(p => L2_IDS.includes(p.id)).map(renderPlatChip)}
+                  </div>
+                </div>
+              </>
             )}
             <p className="text-xs text-muted-foreground">未登录的平台：浏览器访问其官网登录后自动亮起</p>
           </div>
