@@ -112,9 +112,9 @@ export class XiaohongshuAdapter extends CodeAdapter {
           const uploaded = await this.uploadImageByUrl(src)
           return {
             url: uploaded.url,
-            width: uploaded.attrs?.width as number | undefined,
-            height: uploaded.attrs?.height as number | undefined,
-            fileId: uploaded.attrs?.fileId as string | undefined,
+            width: (uploaded.attrs?.width as number | undefined) ?? 0,
+            height: (uploaded.attrs?.height as number | undefined) ?? 0,
+            fileId: (uploaded.attrs?.fileId as string | undefined) ?? '',
           } satisfies UploadedImage
         },
         onImageProgress: options?.onImageProgress,

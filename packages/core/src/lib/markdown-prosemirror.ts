@@ -72,11 +72,7 @@ type InlineNode =
   | { type: 'break' }
   | { type: 'text'; value: string }
 
-interface BlockNodeBase {
-  children?: BlockNode[]
-}
-
-type BlockNode = BlockNodeBase &
+type BlockNode =
   (
     | { type: 'root'; children: BlockNode[] }
     | { type: 'heading'; depth: number; children: InlineNode[] }
@@ -186,7 +182,7 @@ function parseInline(text: string): InlineNode[] {
   return nodes
 }
 
-export function parseBlocks(markdown: string): BlockNode {
+export function parseBlocks(markdown: string): Extract<BlockNode, { type: 'root' }> {
   const lines = markdown.split('\n')
   const blocks: BlockNode[] = []
   let i = 0
@@ -391,7 +387,10 @@ function inlineNodes(nodes: InlineNode[], ctx: ConvertContext): ProseNode[] {
   return result
 }
 
-function blockquoteAsParagraphs(node: BlockNode, ctx: ConvertContext): ProseNode[] {
+function blockquoteAsParagraphs(
+  node: Extract<BlockNode, { type: 'blockquote' }>,
+  ctx: ConvertContext
+): ProseNode[] {
   const result: ProseNode[] = []
   for (const child of node.children || []) {
     if (child.type !== 'paragraph') continue
@@ -402,7 +401,7 @@ function blockquoteAsParagraphs(node: BlockNode, ctx: ConvertContext): ProseNode
   return result
 }
 
-function tableAsParagraphs(node: BlockNode): ProseNode[] {
+function tableAsParagraphs(node: Extract<BlockNode, { type: 'table' }>): ProseNode[] {
   const result: ProseNode[] = []
   for (const row of node.children || []) {
     if (row.type !== 'tableRow') continue
@@ -433,7 +432,10 @@ function listNode(node: BlockNode & { type: 'list' }, ctx: ConvertContext): Pros
   return [{ type: 'bulletList', content }]
 }
 
-function listItemNode(node: BlockNode, ctx: ConvertContext): ProseNode[] {
+function listItemNode(
+  node: Extract<BlockNode, { type: 'listItem' }>,
+  ctx: ConvertContext
+): ProseNode[] {
   const caps = ctx.capabilities
   const content: ProseNode[] = []
   for (const child of node.children || []) {
