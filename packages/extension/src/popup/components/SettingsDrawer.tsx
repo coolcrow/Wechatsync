@@ -144,6 +144,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       woshipm: '.woshipm.com',
       xueqiu: '.xueqiu.com',
       yuque: '.yuque.com',
+      douyin: '.douyin.com',
     }
     ;(async () => {
       // Phase 1：Cookie 探测 → 秒出首屏
