@@ -38,6 +38,10 @@ async function api(method: string, path: string, body?: unknown) {
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${miaobiToken}` },
     body: body ? JSON.stringify(body) : undefined,
   })
+  if (resp.status === 401) {
+    await chrome.storage.local.remove('miaobiToken')
+    throw new Error('登录已过期，请重新登录')
+  }
   const data = await resp.json()
   if (!resp.ok) throw new Error(data.detail || `请求失败 (${resp.status})`)
   return data
@@ -291,8 +295,22 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
 
   const checkAuth = useCallback(async () => {
     const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
-    setAuthenticated(!!miaobiToken)
-    return !!miaobiToken
+    if (!miaobiToken) { setAuthenticated(false); return false }
+    try {
+      const resp = await fetch(`${MIAOBI_API}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${miaobiToken}` },
+      })
+      if (resp.status === 401) {
+        await chrome.storage.local.remove('miaobiToken')
+        setAuthenticated(false)
+        return false
+      }
+      if (!resp.ok) throw new Error(`me ${resp.status}`)
+    } catch {
+      // 网络异常不强制登出：按已登录处理，接口调用会各自报错
+    }
+    setAuthenticated(true)
+    return true
   }, [])
 
   const loadArticles = useCallback(async () => {
