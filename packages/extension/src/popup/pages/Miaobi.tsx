@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { Settings, Zap, Send, RefreshCw, ChevronRight, BookOpen, Lock, Download, X, Wrench, Play, Flame } from 'lucide-react'
+import { markdownToHtml } from '@wechatsync/core'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 
 const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -382,10 +383,11 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
       const dnaMap: Record<string, { layer: string }> = {}
       ;(dna.platforms || []).forEach((p: { id: string; layer: string }) => dnaMap[p.id] = p)
       const plats = await new Promise<Record<string, unknown>[]>((resolve) => {
-        chrome.runtime.sendMessage({ type: 'LIST_PLATFORMS' }, (r) => resolve(r?.platforms || []))
+        chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => resolve(r?.platforms || []))
       })
       const usable = plats.filter(p => p.isAuthenticated)
       if (!usable.length) { setError('没有已登录的分发平台'); return }
+      const failed: string[] = []
       for (const plat of usable) {
         const pid = plat.id as string
         let content = master
@@ -395,11 +397,20 @@ export function MiaobiTab({ onOpenSettings: _ }: { onOpenSettings?: () => void }
           const pvDetail = await api('GET', `/api/articles/${id}/platform-versions/${latest.id}`)
           content = pvDetail.content
         }
-        await new Promise((resolve) => {
-          chrome.runtime.sendMessage({ type: 'SYNC_TO_PLATFORM', payload: { platform: pid, title, content } }, resolve)
+        // 与 MCP 桥接路径一致：markdown 先转 HTML 再走 SYNC_ARTICLE（含预处理/历史记录）
+        let html = ''
+        try { html = markdownToHtml(content) } catch { html = content.replace(/\n/g, '<br>') }
+        const resp = await new Promise<{ results?: { success: boolean }[]; error?: string } | undefined>((resolve) => {
+          chrome.runtime.sendMessage({
+            type: 'SYNC_ARTICLE',
+            payload: { article: { title, content: html, html, markdown: content }, platforms: [pid] },
+          }, resolve)
         })
+        if (!resp || resp.error || resp.results?.some(r => !r.success)) {
+          failed.push((plat.name as string) || pid)
+        }
       }
-      setError(null)
+      setError(failed.length ? `部分平台同步失败：${failed.join('、')}（详情见同步历史）` : null)
     } catch (e) { setError((e as Error).message) }
     finally { setSyncingId(null) }
   }, [articles])
