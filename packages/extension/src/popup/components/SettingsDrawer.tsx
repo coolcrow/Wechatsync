@@ -35,6 +35,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
   const [cookiePlatforms, setCookiePlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean }[]>([])
+  const [autoSyncMsg, setAutoSyncMsg] = useState<string | null>(null)
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -213,8 +214,37 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           }
         })
         setPlatforms(merged)
+
+        // 微信/头条已登录 → 自动同步 Cookie 到服务器（免手动按钮）
+        autoSyncServerCookies(merged)
       })
     })()
+
+    const autoSyncServerCookies = async (plats: { id: string; name: string; isAuthenticated: boolean }[]) => {
+      const ids = ['weixin', 'toutiao']
+      const toSync = plats.filter(m => ids.includes(m.id) && m.isAuthenticated)
+      if (!toSync.length) return
+      const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
+      if (!miaobiToken) return
+      const msgs: string[] = []
+      for (const plat of toSync) {
+        const domain = plat.id === 'weixin' ? 'mp.weixin.qq.com' : '.toutiao.com'
+        try {
+          const cookies = await chrome.cookies.getAll({ domain })
+          const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
+          if (cookieStr.length < 50) continue
+          const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${miaobiToken}` },
+            body: JSON.stringify({ platform: plat.id === 'weixin' ? 'wechat' : 'toutiao', cookies: cookieStr }),
+          })
+          const data = await resp.json()
+          if (resp.ok) msgs.push(`${plat.name}: ${data.message || '已同步'}`)
+          else msgs.push(`${plat.name}: ${data.detail || '同步失败'}`)
+        } catch { msgs.push(`${plat.name}: 网络异常`) }
+      }
+      if (msgs.length) setAutoSyncMsg(msgs.join(' · '))
+    }
 
     // 妙笔登录态探测
     chrome.storage.local.get('miaobiToken', async ({ miaobiToken }) => {
@@ -433,22 +463,6 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 {miaobiMsg && <p className="text-xs text-muted-foreground break-all">{miaobiMsg}</p>}
               </div>
 
-              <div className="p-3 border rounded-lg space-y-2 bg-card">
-                <div>
-                  <p className="text-sm font-medium">头条 Cookie 同步</p>
-                  <p className="text-xs text-muted-foreground">
-                    自动读取浏览器中的头条登录 Cookie，同步到服务器（同步后无需浏览器在线也能发布）
-                  </p>
-                </div>
-                <button
-                  onClick={handleCookieSync}
-                  className="w-full bg-primary/10 text-primary text-sm py-1.5 rounded-md hover:bg-primary/20 border border-primary/30"
-                >
-                  同步头条 Cookie
-                </button>
-                {cookieSyncMsg && <p className="text-xs text-muted-foreground break-all">{cookieSyncMsg}</p>}
-              </div>
-
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div>
@@ -529,7 +543,8 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                 ))}
               </div>
             )}
-            <p className="text-xs text-muted-foreground">未登录的平台：浏览器访问其官网登录后自动亮起，无需在此配置</p>
+            <p className="text-xs text-muted-foreground">未登录的平台：浏览器访问其官网登录后自动亮起</p>
+            {autoSyncMsg && <p className="text-xs" style={{ color: 'hsl(var(--pine))' }}>✓ {autoSyncMsg}</p>}
           </div>
 
           {/* CMS 账户 */}

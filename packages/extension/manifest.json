@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "妙笔·全渠道发布",
   "description": "妙笔内容工作流：登录妙笔账号一键配置，同步文章到知乎、掘金、CSDN、B站等 20+ 平台（基于开源项目 Wechatsync）",
-  "version": "2.4.5",
+  "version": "2.4.6",
   "icons": {
     "16": "assets/icon-16.png",
     "48": "assets/icon-48.png",
