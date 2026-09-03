@@ -86,61 +86,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     }
   }
 
-  const [cookieSyncMsg, setCookieSyncMsg] = useState('')
-  const handleCookieSync = async () => {
-    setCookieSyncMsg('正在读取浏览器 Cookie…')
-    try {
-      const cookies = await chrome.cookies.getAll({ domain: '.toutiao.com' })
-      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
-      if (cookieStr.length < 50) {
-        throw new Error('未检测到头条登录 Cookie，请先在浏览器中登录 mp.toutiao.com')
-      }
-      setCookieSyncMsg('正在同步到服务器…')
-      const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
-      if (!miaobiToken) throw new Error('请先完成妙笔一键配置')
-      const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${miaobiToken}`,
-        },
-        body: JSON.stringify({ platform: 'toutiao', cookies: cookieStr }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.detail || `同步失败 (${resp.status})`)
-      setCookieSyncMsg(`✓ ${data.message}——服务器现在可以独立发布头条了`)
-    } catch (e) {
-      setCookieSyncMsg(`同步失败: ${(e as Error).message}`)
-    }
-  }
 
-  const [wechatSyncMsg, setWechatSyncMsg] = useState('')
-  const handleWechatSync = async () => {
-    setWechatSyncMsg('正在读取公众号登录态…')
-    try {
-      const cookies = await chrome.cookies.getAll({ domain: 'mp.weixin.qq.com' })
-      const cookieStr = cookies.map(c => `${c.name}=${c.value}`).join('; ')
-      if (cookieStr.length < 50) {
-        throw new Error('未检测到公众号登录 Cookie，请先在浏览器中扫码登录 mp.weixin.qq.com')
-      }
-      setWechatSyncMsg('正在验证并同步到服务器…')
-      const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
-      if (!miaobiToken) throw new Error('请先完成妙笔一键配置')
-      const resp = await fetch(`${MIAOBI_API}/api/accounts/sync-cookie`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${miaobiToken}`,
-        },
-        body: JSON.stringify({ platform: 'wechat', cookies: cookieStr }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) throw new Error(data.detail || `同步失败 (${resp.status})`)
-      setWechatSyncMsg(`✓ ${data.message}——公众号 Cookie 直发已就绪`)
-    } catch (e) {
-      setWechatSyncMsg(`同步失败: ${(e as Error).message}`)
-    }
-  }
 
   // 获取状态
   useEffect(() => {
@@ -461,24 +407,6 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                   </>
                 )}
                 {miaobiMsg && <p className="text-xs text-muted-foreground break-all">{miaobiMsg}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm font-medium">微信公众号 Cookie</p>
-                    <p className="text-xs text-muted-foreground">
-                      扫码登录 mp.weixin.qq.com 后同步，服务器即可免配置直发公众号草稿箱；多账号换登后逐个同步。
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={handleWechatSync}
-                  className="w-full bg-primary/10 text-primary text-sm py-1.5 rounded-md hover:bg-primary/20 border border-primary/30"
-                >
-                  同步公众号 Cookie
-                </button>
-                {wechatSyncMsg && <p className="text-xs text-muted-foreground break-all">{wechatSyncMsg}</p>}
               </div>
 
             {mcpStatus.enabled && (
