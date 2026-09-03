@@ -36,6 +36,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
   const [cookiePlatforms, setCookiePlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean }[]>([])
   const [autoSyncMsg, setAutoSyncMsg] = useState<string | null>(null)
+  const [verifying, setVerifying] = useState(false)
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -116,6 +117,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     })
 
     // 平台登录状态——统一 Cookie 域名探测（全平台一把查，零请求）
+    const DOMAIN_NAMES: Record<string, string> = {
+      weixin: '微信公众号', toutiao: '今日头条', csdn: 'CSDN', zhihu: '知乎',
+      juejin: '掘金', bilibili: 'B站专栏', weibo: '微博', baijiahao: '百家号',
+      cnblogs: '博客园', cto51: '51CTO', douban: '豆瓣', eastmoney: '东方财富',
+      imooc: '慕课网', oschina: '开源中国', segmentfault: '思否', sohu: '搜狐号',
+      woshipm: '人人都是产品经理', xueqiu: '雪球', yuque: '语雀',
+    }
     const DOMAIN_MAP: Record<string, string> = {
       weixin: 'mp.weixin.qq.com',
       toutiao: '.toutiao.com',
@@ -138,31 +146,40 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       yuque: '.yuque.com',
     }
     ;(async () => {
+      // Phase 1：Cookie 探测 → 秒出首屏
       const results = await Promise.all(
         Object.entries(DOMAIN_MAP).map(async ([id, domain]) => {
           const cookies = await chrome.cookies.getAll({ domain })
-          // 有意义 Cookie（值 > 20 字符的会话令牌）判定登录
           const authenticated = cookies.some(c => c.value.length > 20)
           return { id, isAuthenticated: authenticated }
         })
       )
-      // 从 CHECK_ALL_AUTH 取平台名（保证多语言一致），Cookie 判定优先
+      setPlatforms(results.map(cr => ({ ...cr, name: DOMAIN_NAMES[cr.id] || cr.id })))
+      setVerifying(true)
+
+      // Phase 2：适配器逐平台真实验证 → 过期 Cookie 自动变灰
       chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => {
         const adapterPlatforms = (r && !r.error ? r.platforms : []) as { id: string; name: string; isAuthenticated: boolean }[]
-        const merged = results.map(cr => {
+        const verified = results.map(cr => {
           const adapter = adapterPlatforms.find(ap => ap.id === cr.id)
-          return { id: cr.id, name: adapter?.name || cr.id, isAuthenticated: cr.isAuthenticated || (adapter?.isAuthenticated ?? false) }
-        })
-        // 加入适配器中有但 DOMAIN_MAP 没有的（如 CMS 自建站点）
-        adapterPlatforms.forEach(ap => {
-          if (!DOMAIN_MAP[ap.id] && !merged.find(m => m.id === ap.id)) {
-            merged.push({ id: ap.id, name: ap.name, isAuthenticated: ap.isAuthenticated })
+          return {
+            id: cr.id,
+            name: adapter?.name || DOMAIN_NAMES[cr.id] || cr.id,
+            // 适配器是权威：有适配器的平台以适配器判定为准（覆盖 Cookie 假阳性）
+            // 无适配器的平台（如头条）保留 Cookie 判定
+            isAuthenticated: adapter ? adapter.isAuthenticated : cr.isAuthenticated,
           }
         })
-        setPlatforms(merged)
+        adapterPlatforms.forEach(ap => {
+          if (!DOMAIN_MAP[ap.id] && !verified.find(m => m.id === ap.id)) {
+            verified.push({ id: ap.id, name: ap.name, isAuthenticated: ap.isAuthenticated })
+          }
+        })
+        setPlatforms(verified)
+        setVerifying(false)
 
-        // 微信/头条已登录 → 自动同步 Cookie 到服务器（免手动按钮）
-        autoSyncServerCookies(merged)
+        // 微信/头条已登录 → 自动同步 Cookie 到服务器（仅在验证通过后）
+        autoSyncServerCookies(verified)
       })
     })()
 
@@ -441,7 +458,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-muted-foreground">平台登录状态</h3>
               <span className="text-xs text-muted-foreground">
-                {platforms.filter(p => p.isAuthenticated).length}/{platforms.length} 已登录
+                {verifying ? "验证中…" : `${platforms.filter(p => p.isAuthenticated).length}/${platforms.length} 已登录`}
               </span>
             </div>
             {platforms.length === 0 ? (
