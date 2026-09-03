@@ -35,7 +35,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
   const [cookiePlatforms, setCookiePlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean }[]>([])
-  const [autoSyncMsg, setAutoSyncMsg] = useState<string | null>(null)
+  const [syncedIds, setSyncedIds] = useState<Set<string>>(new Set())
   const [verifying, setVerifying] = useState(false)
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -189,7 +189,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       if (!toSync.length) return
       const { miaobiToken } = await chrome.storage.local.get('miaobiToken')
       if (!miaobiToken) return
-      const msgs: string[] = []
+      const synced = new Set<string>()
       for (const plat of toSync) {
         const domain = plat.id === 'weixin' ? 'mp.weixin.qq.com' : '.toutiao.com'
         try {
@@ -201,12 +201,10 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${miaobiToken}` },
             body: JSON.stringify({ platform: plat.id === 'weixin' ? 'wechat' : 'toutiao', cookies: cookieStr }),
           })
-          const data = await resp.json()
-          if (resp.ok) msgs.push(`${plat.name}: ${data.message || '已同步'}`)
-          else msgs.push(`${plat.name}: ${data.detail || '同步失败'}`)
-        } catch { msgs.push(`${plat.name}: 网络异常`) }
+          if (resp.ok) synced.add(plat.id)
+        } catch { /* 静默 */ }
       }
-      if (msgs.length) setAutoSyncMsg(msgs.join(' · '))
+      if (synced.size) setSyncedIds(synced)
     }
 
     // 妙笔登录态探测
@@ -484,12 +482,14 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                       }}
                     />
                     {p.name}
+                    {syncedIds.has(p.id) && (
+                      <span style={{ fontSize: 9, fontWeight: 600, marginLeft: 2, opacity: 0.8 }}>↺</span>
+                    )}
                   </span>
                 ))}
               </div>
             )}
             <p className="text-xs text-muted-foreground">未登录的平台：浏览器访问其官网登录后自动亮起</p>
-            {autoSyncMsg && <p className="text-xs" style={{ color: 'hsl(var(--pine))' }}>✓ {autoSyncMsg}</p>}
           </div>
 
           {/* CMS 账户 */}
