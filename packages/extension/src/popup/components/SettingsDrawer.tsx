@@ -34,7 +34,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [miaobiPass, setMiaobiPass] = useState('')
   const [miaobiAccount, setMiaobiAccount] = useState<string | null>(null)
   const [platforms, setPlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean; username?: string }[]>([])
-  const [toutiaoLoggedIn, setToutiaoLoggedIn] = useState<boolean | null>(null)
+  const [cookiePlatforms, setCookiePlatforms] = useState<{ id: string; name: string; isAuthenticated: boolean }[]>([])
   const serverUrlTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const MIAOBI_API = 'https://mp.aibolt.tech'
@@ -168,14 +168,53 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       setFloatingButtonEnabled(result.floatingButtonEnabled ?? false)
     })
 
-    // 平台登录状态
-    chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => {
-      if (r && !r.error) setPlatforms(r.platforms || [])
-    })
-    // 头条无浏览器适配器（服务器 Cookie 直发），以浏览器会话判定
-    chrome.cookies.getAll({ domain: '.toutiao.com' }, (cookies) => {
-      setToutiaoLoggedIn(cookies.some(c => c.name === 'sessionid' && c.value))
-    })
+    // 平台登录状态——统一 Cookie 域名探测（全平台一把查，零请求）
+    const DOMAIN_MAP: Record<string, string> = {
+      weixin: 'mp.weixin.qq.com',
+      toutiao: '.toutiao.com',
+      csdn: '.csdn.net',
+      zhihu: '.zhihu.com',
+      juejin: '.juejin.cn',
+      bilibili: '.bilibili.com',
+      weibo: '.weibo.com',
+      baijiahao: 'baijiahao.baidu.com',
+      cnblogs: '.cnblogs.com',
+      cto51: '.51cto.com',
+      douban: '.douban.com',
+      eastmoney: '.eastmoney.com',
+      imooc: '.imooc.com',
+      oschina: '.oschina.net',
+      segmentfault: '.segmentfault.com',
+      sohu: '.sohu.com',
+      woshipm: '.woshipm.com',
+      xueqiu: '.xueqiu.com',
+      yuque: '.yuque.com',
+    }
+    ;(async () => {
+      const results = await Promise.all(
+        Object.entries(DOMAIN_MAP).map(async ([id, domain]) => {
+          const cookies = await chrome.cookies.getAll({ domain })
+          // 有意义 Cookie（值 > 20 字符的会话令牌）判定登录
+          const authenticated = cookies.some(c => c.value.length > 20)
+          return { id, isAuthenticated: authenticated }
+        })
+      )
+      // 从 CHECK_ALL_AUTH 取平台名（保证多语言一致），Cookie 判定优先
+      chrome.runtime.sendMessage({ type: 'CHECK_ALL_AUTH' }, (r) => {
+        const adapterPlatforms = (r && !r.error ? r.platforms : []) as { id: string; name: string; isAuthenticated: boolean }[]
+        const merged = results.map(cr => {
+          const adapter = adapterPlatforms.find(ap => ap.id === cr.id)
+          return { id: cr.id, name: adapter?.name || cr.id, isAuthenticated: cr.isAuthenticated || (adapter?.isAuthenticated ?? false) }
+        })
+        // 加入适配器中有但 DOMAIN_MAP 没有的（如 CMS 自建站点）
+        adapterPlatforms.forEach(ap => {
+          if (!DOMAIN_MAP[ap.id] && !merged.find(m => m.id === ap.id)) {
+            merged.push({ id: ap.id, name: ap.name, isAuthenticated: ap.isAuthenticated })
+          }
+        })
+        setPlatforms(merged)
+      })
+    })()
 
     // 妙笔登录态探测
     chrome.storage.local.get('miaobiToken', async ({ miaobiToken }) => {
@@ -460,31 +499,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-medium text-muted-foreground">平台登录状态</h3>
               <span className="text-xs text-muted-foreground">
-                {(platforms.filter(p => p.isAuthenticated).length + (toutiaoLoggedIn ? 1 : 0))}/{platforms.length + 1} 已登录
+                {platforms.filter(p => p.isAuthenticated).length}/{platforms.length} 已登录
               </span>
             </div>
             {platforms.length === 0 ? (
               <p className="text-xs text-muted-foreground">检测中…</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                <span
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px]"
-                  style={{
-                    borderColor: toutiaoLoggedIn ? 'hsl(var(--pine) / .4)' : 'hsl(var(--border))',
-                    color: toutiaoLoggedIn ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground))',
-                    background: toutiaoLoggedIn ? 'hsl(var(--pine) / .07)' : 'transparent',
-                  }}
-                  title={toutiaoLoggedIn ? '浏览器已登录 mp.toutiao.com——点下方「同步头条 Cookie」让服务器直发就绪' : '未登录——浏览器访问 mp.toutiao.com 登录后亮起'}
-                >
-                  <span
-                    style={{
-                      width: 6, height: 6, borderRadius: '50%',
-                      background: toutiaoLoggedIn ? 'hsl(var(--pine))' : 'hsl(var(--muted-foreground) / .4)',
-                      display: 'inline-block',
-                    }}
-                  />
-                  今日头条
-                </span>
                 {platforms.map(p => (
                   <span
                     key={p.id}
