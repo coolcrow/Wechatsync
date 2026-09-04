@@ -457,16 +457,20 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
       // 安全网：popup 传来的可能仍是整段分享文案——先提取纯 URL
       const urlMatch = (message.payload.url as string).match(/https?:\/\/[^\s<>"']+/)
       const url = urlMatch ? urlMatch[0].replace(/[，。,。）)\]]+$/, '') : message.payload.url
-      const tab = await chrome.tabs.create({ url, active: false })
+      // 必须前置标签页：Chrome 后台标签节流（定时器降频/媒体推迟加载）会卡死提取脚本
+      const tab = await chrome.tabs.create({ url, active: true })
       try {
         await new Promise<void>((resolve) => {
           const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
-            if (tabId === tab.id && info.status === 'complete') resolve()
+            if (tabId === tab.id && info.status === 'complete') {
+              chrome.tabs.onUpdated.removeListener(listener)
+              resolve()
+            }
           }
           chrome.tabs.onUpdated.addListener(listener)
-          setTimeout(resolve, 15000)
+          setTimeout(() => { chrome.tabs.onUpdated.removeListener(listener); resolve() }, 12000)
         })
-        await new Promise(r => setTimeout(r, 2000))
+        await new Promise(r => setTimeout(r, 1500))
         const results = await chrome.scripting.executeScript({
           target: { tabId: tab.id! },
           func: async () => {
