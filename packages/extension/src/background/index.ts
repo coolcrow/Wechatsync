@@ -454,7 +454,9 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
     case 'EXTRACT_VIDEO': {
       // 抖音 2026 全面加固：服务端解析全不可用（yt-dlp 缺签名挑战实现）。
       // 在真实浏览器标签页打开分享链 → 静音播放 → MSE 分段暴露无水印 CDN 直链。
-      const { url } = message.payload
+      // 安全网：popup 传来的可能仍是整段分享文案——先提取纯 URL
+      const urlMatch = (message.payload.url as string).match(/https?:\/\/[^\s<>"']+/)
+      const url = urlMatch ? urlMatch[0].replace(/[，。,。）)\]]+$/, '') : message.payload.url
       const tab = await chrome.tabs.create({ url, active: false })
       try {
         await new Promise<void>((resolve) => {
