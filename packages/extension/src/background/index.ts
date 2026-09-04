@@ -127,6 +127,7 @@ type MessageAction =
   | { type: 'CHECK_AUTH'; payload: { platformId: string } }
   | { type: 'SYNC_ARTICLE'; payload: { article: any; platforms: string[]; allSelectedPlatforms?: string[]; skipHistory?: boolean; source?: string; syncId?: string } }
   | { type: 'OPEN_SYNC_PAGE'; path?: string }
+  | { type: 'EXTRACT_VIDEO'; payload: { url: string } }
   | { type: 'TEST_CMS_CONNECTION'; payload: { type: CMSType; url: string; username: string; password: string } }
   | { type: 'SYNC_TO_CMS'; payload: { accountId: string; article: any } }
   | { type: 'MCP_ENABLE' }
@@ -448,6 +449,46 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
       }
 
       return { results: allResults, rateLimitWarning, syncId }
+    }
+
+    case 'EXTRACT_VIDEO': {
+      // 抖音 2026 全面加固：服务端解析全不可用（yt-dlp 缺签名挑战实现）。
+      // 在真实浏览器标签页打开分享链 → 静音播放 → MSE 分段暴露无水印 CDN 直链。
+      const { url } = message.payload
+      const tab = await chrome.tabs.create({ url, active: false })
+      try {
+        await new Promise<void>((resolve) => {
+          const listener = (tabId: number, info: chrome.tabs.TabChangeInfo) => {
+            if (tabId === tab.id && info.status === 'complete') resolve()
+          }
+          chrome.tabs.onUpdated.addListener(listener)
+          setTimeout(resolve, 15000)
+        })
+        await new Promise(r => setTimeout(r, 2000))
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id! },
+          func: async () => {
+            const v = document.querySelector('video')
+            if (v) { v.muted = true; try { await v.play() } catch {} }
+            await new Promise(r => setTimeout(r, 3000))
+            const media = performance.getEntriesByType('resource')
+              .map(e => e.name)
+              .filter(u => u.includes('douyinvod.com') || (u.includes('snssdk.com') && u.includes('video')))
+            const poster = (document.querySelector('video') as HTMLVideoElement | null)?.poster || ''
+            const ogImage = document.querySelector('meta[property="og:image"]')?.getAttribute('content') || ''
+            return {
+              videoUrl: media[0] || '',
+              title: document.title.slice(0, 200),
+              cover: poster || ogImage,
+            }
+          },
+        })
+        const data = results?.[0]?.result as { videoUrl: string; title: string; cover: string } | undefined
+        if (!data?.videoUrl) return { success: false, error: '页面未能提取到视频直链' }
+        return { success: true, ...data }
+      } finally {
+        if (tab.id !== undefined) chrome.tabs.remove(tab.id).catch(() => {})
+      }
     }
 
     case 'OPEN_SYNC_PAGE': {

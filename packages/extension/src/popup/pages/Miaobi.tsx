@@ -217,8 +217,25 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
   const parseVideo = async () => {
     if (!videoUrl.trim()) return
     setVideoParsing(true); setVideoError(null); setVideoResult(null)
-    try { const d = await api('POST', '/api/video/parse', { url: videoUrl.trim() }); setVideoResult(d) }
-    catch (e) { setVideoError((e as Error).message) }
+    try {
+      const d = await api('POST', '/api/video/parse', { url: videoUrl.trim() })
+      setVideoResult(d)
+    } catch (serverErr) {
+      // 服务端解析失败（抖音 2026 反爬全拦）→ 浏览器内提取回填缓存
+      const isDouyin = /douyin\.com/i.test(videoUrl)
+      if (!isDouyin) { setVideoError((serverErr as Error).message); return }
+      try {
+        const ext = await new Promise<{ success: boolean; videoUrl?: string; title?: string; cover?: string; error?: string }>((resolve) => {
+          chrome.runtime.sendMessage({ type: 'EXTRACT_VIDEO', payload: { url: videoUrl.trim() } }, resolve)
+        })
+        if (!ext?.success || !ext.videoUrl) throw new Error(ext?.error || '浏览器提取失败')
+        const cached = await api('POST', '/api/video/cache-external', {
+          url: videoUrl.trim(), platform: 'douyin',
+          video_url: ext.videoUrl, title: ext.title, cover_url: ext.cover || null,
+        })
+        setVideoResult(cached)
+      } catch (e2) { setVideoError(`${(serverErr as Error).message}；浏览器提取也失败：${(e2 as Error).message}`) }
+    }
     finally { setVideoParsing(false) }
   }
 
