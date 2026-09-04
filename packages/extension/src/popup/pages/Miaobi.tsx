@@ -27,7 +27,7 @@ interface PlatformVersion {
 
 interface CollectData { title: string; content: string; source_url: string; category: string }
 
-const STATUS_MAP: Record<string, string> = { draft: '待改', rewritten: '已改', published: '已发', failed: '退稿' }
+const STATUS_MAP: Record<string, string> = { draft: '待改', rewritten: '已改', published: '已发', failed: '退稿', publishing: '发布中' }
 const FLAVOR_TEXT: Record<string, string> = { clean: '干净', light: '轻度', heavy: '偏重' }
 
 async function api(method: string, path: string, body?: unknown) {

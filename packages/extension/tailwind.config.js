@@ -3,6 +3,11 @@ export default {
   content: [
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // 动态拼接的类名（mb-seal-${status} / mb-flavor-${band}）扫描不到，需 safelist 保住
+  safelist: [
+    'mb-seal-draft', 'mb-seal-rewritten', 'mb-seal-published', 'mb-seal-failed', 'mb-seal-publishing', 'mb-seal-ver',
+    'mb-flavor-clean', 'mb-flavor-light', 'mb-flavor-heavy',
+  ],
   theme: {
     extend: {
       colors: {

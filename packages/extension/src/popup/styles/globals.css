@@ -39,17 +39,21 @@
 
 @layer components {
   /* ═══ 印章 ═══ */
+  /* 印蜕状态系统——与管理台同语法：白文常态、朱文警示、分态微旋转 */
   .mb-seal {
     display: inline-flex; align-items: center;
-    padding: 1px 6px; font-size: 10px; font-weight: 700;
-    letter-spacing: 1px; border-radius: 2px;
+    padding: 2px 7px; font-size: 10.5px; font-weight: 600;
+    letter-spacing: 1.5px; border-radius: 2px;
     border: 1.5px solid currentColor;
-    transform: rotate(-1.2deg); line-height: 1.5;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.05), inset 0 0 8px -2px currentColor;
+    line-height: 1.5; flex-shrink: 0;
+    font-family: "Noto Serif SC", "Songti SC", serif;
   }
-  .mb-seal-draft { color: hsl(var(--faint)); border-style: dashed; }
-  .mb-seal-rewritten { color: hsl(var(--ochre)); }
-  .mb-seal-published { color: hsl(var(--pine)); }
-  .mb-seal-failed { color: hsl(var(--primary)); }
+  .mb-seal-draft { color: hsl(var(--foreground) / .8); transform: rotate(-2deg); border-color: hsl(var(--faint)); }
+  .mb-seal-rewritten { color: hsl(var(--ochre)); transform: rotate(1.5deg); background: hsl(var(--ochre) / .06); }
+  .mb-seal-published { color: hsl(var(--pine)); transform: rotate(-1deg); background: hsl(var(--pine) / .07); }
+  .mb-seal-failed { color: hsl(30 43% 97%); background: hsl(var(--primary)); border-color: hsl(var(--primary) / .8); transform: rotate(-2.5deg); }
+  .mb-seal-publishing { color: hsl(30 43% 97%); background: hsl(var(--ochre)); border-color: hsl(var(--ochre) / .8); transform: rotate(2deg); }
   .mb-seal-ver {
     color: hsl(var(--primary)); font-weight: 600; font-size: 9px;
     border-width: 1px; padding: 0 4px; letter-spacing: .5px;
