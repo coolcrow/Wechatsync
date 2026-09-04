@@ -214,6 +214,30 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
   const [hotTopics, setHotTopics] = useState<{ topic_title: string; topic_url: string; hot_score: number }[]>([])
   const [hotLoading, setHotLoading] = useState(false)
 
+  // popup 被 active:true 标签页关闭后重开——从 storage 恢复提取结果（10 秒内有效）
+  useEffect(() => {
+    chrome.storage.local.get('videoExtractResult').then(({ videoExtractResult: saved }) => {
+      if (!saved || Date.now() - saved.ts > 10000) return
+      chrome.storage.local.remove('videoExtractResult')
+      if (saved.success && saved.videoUrl) {
+        api('POST', '/api/video/cache-external', {
+          url: saved.sourceUrl, platform: 'douyin',
+          video_url: saved.videoUrl, title: saved.title, cover_url: saved.cover || null,
+        }).then(cached => {
+          setVideoResult(cached)
+          setVideoUrl(saved.sourceUrl)
+          setVideoParsing(false)
+        }).catch(e => {
+          setVideoError(`缓存失败: ${e.message}`)
+          setVideoParsing(false)
+        })
+      } else {
+        setVideoError(saved.error || '浏览器提取失败')
+        setVideoParsing(false)
+      }
+    }).catch(() => {})
+  }, [])
+
   const parseVideo = async () => {
     if (!videoUrl.trim()) return
     // 分享文案中提取纯 URL（抖音分享出来的是整段文案不是链接）
@@ -224,7 +248,7 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
       const d = await api('POST', '/api/video/parse', { url })
       setVideoResult(d)
     } catch (serverErr) {
-      // 服务端解析失败（抖音 2026 反爬全拦）→ 浏览器内提取回填缓存
+      // 服务端解析失败（抖音反爬）→ 浏览器提取：popup 会被关闭，结果经 storage 恢复
       const isDouyin = /douyin\.com/i.test(url)
       if (!isDouyin) { setVideoError((serverErr as Error).message); return }
       try {

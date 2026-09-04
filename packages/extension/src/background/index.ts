@@ -490,8 +490,14 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
           },
         })
         const data = results?.[0]?.result as { videoUrl: string; title: string; cover: string } | undefined
-        if (!data?.videoUrl) return { success: false, error: '页面未能提取到视频直链' }
-        return { success: true, ...data }
+        const result = data?.videoUrl
+          ? { success: true, videoUrl: data.videoUrl, title: data.title, cover: data.cover }
+          : { success: false, error: '页面未能提取到视频直链' }
+        // popup 已被 active:true 的标签页关闭——结果必须持久化，popup 重开时读取
+        await chrome.storage.local.set({
+          videoExtractResult: { ...result, sourceUrl: url, ts: Date.now() },
+        })
+        return result
       } finally {
         if (tab.id !== undefined) chrome.tabs.remove(tab.id).catch(() => {})
       }
