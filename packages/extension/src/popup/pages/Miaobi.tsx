@@ -293,11 +293,29 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
         {videoResult && (
           <div className="mt-1.5 p-2 border border-border rounded-md">
             <div className="text-[11px] font-semibold leading-snug mb-1">{videoResult.title}</div>
-            {videoResult.video_url && <button onClick={() => chrome.downloads.download({
-              url: videoResult.video_url,
-              filename: `${(videoResult.title || 'douyin_video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.mp4`,
-              headers: [{ name: 'Referer', value: 'https://www.douyin.com/' }],
-            })} className="inline-flex items-center gap-1 text-[10px] font-semibold cursor-pointer border-none bg-transparent" style={{ color: 'hsl(var(--primary))' }}><Play className="w-3 h-3" /> 下载视频</button>}
+            {videoResult.video_url && <button onClick={async (e) => {
+              const btn = e.currentTarget
+              btn.textContent = '下载中…'
+              btn.disabled = true
+              try {
+                const resp = await fetch(videoResult.video_url, {
+                  headers: { Referer: 'https://www.douyin.com/' },
+                })
+                if (!resp.ok) throw new Error(`${resp.status}`)
+                const blob = await resp.blob()
+                const blobUrl = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = blobUrl
+                a.download = `${(videoResult.title || 'douyin_video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.mp4`
+                a.click()
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+              } catch (err) {
+                alert(`下载失败: ${(err as Error).message}（可尝试在新标签页打开后右键另存）`)
+              } finally {
+                btn.textContent = ''
+                btn.disabled = false
+              }
+            }} className="inline-flex items-center gap-1 text-[10px] font-semibold cursor-pointer border-none bg-transparent" style={{ color: 'hsl(var(--primary))' }}><Play className="w-3 h-3" /> 下载视频</button>}
           </div>
         )}
       </div>
