@@ -497,6 +497,30 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
         await chrome.storage.local.set({
           videoExtractResult: { ...result, sourceUrl: url, ts: Date.now() },
         })
+        // douyinvod CDN 防盗链：下载请求需带 douyin Referer，动态加规则（4 小时有效同 URL 过期）
+        if (result.success) {
+          try {
+            const existing = await chrome.declarativeNetRequest.getDynamicRules()
+            const staleIds = existing.filter(r => r.condition.urlFilter?.includes('douyinvod')).map(r => r.id)
+            await chrome.declarativeNetRequest.updateDynamicRules({
+              removeRuleIds: staleIds,
+              addRules: [{
+                id: Date.now() % 2000000000,
+                priority: 1,
+                action: {
+                  type: chrome.declarativeNetRequest.RuleActionType.MODIFY_HEADERS,
+                  requestHeaders: [{ header: 'Referer', operation: chrome.declarativeNetRequest.HeaderOperation.SET, value: 'https://www.douyin.com/' }],
+                },
+                condition: {
+                  urlFilter: '*douyinvod.com*',
+                  resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME, chrome.declarativeNetRequest.ResourceType.SUB_FRAME, chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST, chrome.declarativeNetRequest.ResourceType.MEDIA, chrome.declarativeNetRequest.ResourceType.OTHER],
+                },
+              }] as chrome.declarativeNetRequest.Rule[],
+            })
+          } catch (e) {
+            logger.warn('Failed to add Referer rule for douyinvod:', e)
+          }
+        }
         return result
       } finally {
         if (tab.id !== undefined) chrome.tabs.remove(tab.id).catch(() => {})
