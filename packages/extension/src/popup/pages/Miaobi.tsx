@@ -293,7 +293,7 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
         {videoResult && (
           <div className="mt-1.5 p-2 border border-border rounded-md">
             <div className="text-[11px] font-semibold leading-snug mb-1">{videoResult.title}</div>
-            {videoResult.video_url && <a href={videoResult.video_url} target="_blank" rel="noopener" className="inline-flex items-center gap-1 text-[10px] font-semibold no-underline" style={{ color: 'hsl(var(--primary))' }}><Play className="w-3 h-3" /> 下载视频</a>}
+            {videoResult.video_url && <button onClick={() => chrome.downloads.download({ url: videoResult.video_url, filename: `${(videoResult.title || 'douyin_video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.mp4` })} className="inline-flex items-center gap-1 text-[10px] font-semibold cursor-pointer border-none bg-transparent" style={{ color: 'hsl(var(--primary))' }}><Play className="w-3 h-3" /> 下载视频</button>}
           </div>
         )}
       </div>
