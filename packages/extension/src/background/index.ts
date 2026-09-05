@@ -529,36 +529,11 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
     }
 
     case 'DOWNLOAD_VIDEO': {
-      // Chrome 安全模型层层拦截 Referer：fetch 层被剥离（forbidden header）、
-      // DNR 对扩展自身请求不生效——终极方案：在 douyin.com 页面上下文里 fetch（天然带 Referer）
-      const { videoUrl, filename } = message.payload
-      let tab = (await chrome.tabs.query({ url: '*://*.douyin.com/*' }))[0]
-      if (!tab) {
-        tab = await chrome.tabs.create({ url: 'https://www.douyin.com/', active: true })
-        await new Promise(r => setTimeout(r, 3000))
-      }
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id! },
-          func: async (u: string, name: string) => {
-            const resp = await fetch(u)
-            if (!resp.ok) return { success: false, error: `${resp.status}` }
-            const blob = await resp.blob()
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = name
-            a.click()
-            setTimeout(() => URL.revokeObjectURL(url), 30000)
-            return { success: true, size: blob.size }
-          },
-          args: [videoUrl, filename],
-        })
-        const result = results?.[0]?.result as { success: boolean; error?: string } | undefined
-        return result || { success: false, error: '页面脚本无返回' }
-      } catch (e) {
-        return { success: false, error: (e as Error).message }
-      }
+      // 最终方案：直接开标签页打开 CDN URL——DNR 规则注入 Referer 后视频可正常加载播放，
+      // 用户右键 →「将视频另存为」或 Ctrl+S 保存。所有 blob/download API 方案均被 Chrome 安全模型拦截。
+      const { videoUrl } = message.payload
+      await chrome.tabs.create({ url: videoUrl, active: true })
+      return { success: true, method: 'tab' }
     }
 
     case 'OPEN_SYNC_PAGE': {
