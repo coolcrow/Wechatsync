@@ -293,6 +293,7 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
         {videoResult && (
           <div className="mt-1.5 p-2 border border-border rounded-md">
             <div className="text-[11px] font-semibold leading-snug mb-1">{videoResult.title}</div>
+            {videoResult.video_url && <div className="text-[9px] text-muted-foreground mt-1" style={{ lineHeight: 1.4 }}>点击后视频将在新标签页打开<br/>在视频上<b>右键 →「将视频另存为」</b>保存</div>}
             {videoResult.video_url && <button onClick={async (e) => {
               const btn = e.currentTarget
               btn.textContent = '下载中…'
