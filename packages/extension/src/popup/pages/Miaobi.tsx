@@ -298,9 +298,8 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
               btn.textContent = '下载中…'
               btn.disabled = true
               try {
-                const resp = await fetch(videoResult.video_url, {
-                  headers: { Referer: 'https://www.douyin.com/' },
-                })
+                // Referer 由 declarativeNetRequest 规则注入（fetch 层设会被浏览器剥离）
+                const resp = await fetch(videoResult.video_url)
                 if (!resp.ok) throw new Error(`${resp.status}`)
                 const blob = await resp.blob()
                 const blobUrl = URL.createObjectURL(blob)
