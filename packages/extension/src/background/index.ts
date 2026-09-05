@@ -128,6 +128,7 @@ type MessageAction =
   | { type: 'SYNC_ARTICLE'; payload: { article: any; platforms: string[]; allSelectedPlatforms?: string[]; skipHistory?: boolean; source?: string; syncId?: string } }
   | { type: 'OPEN_SYNC_PAGE'; path?: string }
   | { type: 'EXTRACT_VIDEO'; payload: { url: string } }
+  | { type: 'DOWNLOAD_VIDEO'; payload: { videoUrl: string; filename: string } }
   | { type: 'TEST_CMS_CONNECTION'; payload: { type: CMSType; url: string; username: string; password: string } }
   | { type: 'SYNC_TO_CMS'; payload: { accountId: string; article: any } }
   | { type: 'MCP_ENABLE' }
@@ -524,6 +525,39 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
         return result
       } finally {
         if (tab.id !== undefined) chrome.tabs.remove(tab.id).catch(() => {})
+      }
+    }
+
+    case 'DOWNLOAD_VIDEO': {
+      // Chrome 安全模型层层拦截 Referer：fetch 层被剥离（forbidden header）、
+      // DNR 对扩展自身请求不生效——终极方案：在 douyin.com 页面上下文里 fetch（天然带 Referer）
+      const { videoUrl, filename } = message.payload
+      let tab = (await chrome.tabs.query({ url: '*://*.douyin.com/*' }))[0]
+      if (!tab) {
+        tab = await chrome.tabs.create({ url: 'https://www.douyin.com/', active: true })
+        await new Promise(r => setTimeout(r, 3000))
+      }
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId: tab.id! },
+          func: async (u: string, name: string) => {
+            const resp = await fetch(u)
+            if (!resp.ok) return { success: false, error: `${resp.status}` }
+            const blob = await resp.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = name
+            a.click()
+            setTimeout(() => URL.revokeObjectURL(url), 30000)
+            return { success: true, size: blob.size }
+          },
+          args: [videoUrl, filename],
+        })
+        const result = results?.[0]?.result as { success: boolean; error?: string } | undefined
+        return result || { success: false, error: '页面脚本无返回' }
+      } catch (e) {
+        return { success: false, error: (e as Error).message }
       }
     }
 

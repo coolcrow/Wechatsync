@@ -298,18 +298,13 @@ function ToolsPanel({ onClose }: { onClose: () => void }) {
               btn.textContent = '下载中…'
               btn.disabled = true
               try {
-                // Referer 由 declarativeNetRequest 规则注入（fetch 层设会被浏览器剥离）
-                const resp = await fetch(videoResult.video_url)
-                if (!resp.ok) throw new Error(`${resp.status}`)
-                const blob = await resp.blob()
-                const blobUrl = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = blobUrl
-                a.download = `${(videoResult.title || 'douyin_video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.mp4`
-                a.click()
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 10000)
+                const filename = `${(videoResult.title || 'douyin_video').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60)}.mp4`
+                const r = await new Promise<{ success: boolean; error?: string }>((resolve) => {
+                  chrome.runtime.sendMessage({ type: 'DOWNLOAD_VIDEO', payload: { videoUrl: videoResult.video_url, filename } }, resolve)
+                })
+                if (!r?.success) throw new Error(r?.error || '下载失败')
               } catch (err) {
-                alert(`下载失败: ${(err as Error).message}（可尝试在新标签页打开后右键另存）`)
+                alert(`下载失败: ${(err as Error).message}`)
               } finally {
                 btn.textContent = ''
                 btn.disabled = false
