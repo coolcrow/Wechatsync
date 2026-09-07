@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "release": "bash scripts/release.sh"
   },
   "dependencies": {
     "@wechatsync/core": "workspace:*",
