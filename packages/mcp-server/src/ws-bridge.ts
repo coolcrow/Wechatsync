@@ -15,7 +15,10 @@ const WS_OPEN = WebSocket.OPEN
 export class ExtensionBridge {
   private wss: any = null
   private httpServer: http.Server | null = null
-  private client: any = null
+  // 多用户会话：token -> ws。''（无 token）与全局 token 连接归入 LEGACY 槽，
+  // 兼容旧版扩展；新版扩展以每用户 token 连接，各自隔离
+  private clients = new Map<string, any>()
+  private static readonly LEGACY = '__legacy__'
   private isServerMode = false
   private pendingRequests = new Map<string, {
     resolve: (value: unknown) => void
@@ -76,9 +79,24 @@ export class ExtensionBridge {
             .catch(reject)
         })
 
-        this.wss.on('connection', (ws: any) => {
-          if (!this.silent) console.error('[Bridge] Extension connected')
-          this.client = ws
+        this.wss.on('connection', (ws: any, req: any) => {
+          // 连接 URL 携带 ?token=<每用户 token>；缺省或等于全局 token 归入 legacy 槽
+          let presented = ''
+          try {
+            presented = (new URL(req.url, 'http://localhost').searchParams.get('token') || '')
+              .trim().slice(0, 128)
+          } catch { /* ignore */ }
+          const slot = (!presented || presented === this.token)
+            ? ExtensionBridge.LEGACY
+            : presented
+          const stale = this.clients.get(slot)
+          if (stale && stale !== ws && stale.readyState === WS_OPEN) {
+            try { stale.close() } catch { /* ignore */ }
+          }
+          this.clients.set(slot, ws)
+          if (!this.silent) {
+            console.error(`[Bridge] Extension connected (slot=${slot === ExtensionBridge.LEGACY ? 'legacy' : 'user'}, sessions=${this.clients.size})`)
+          }
 
           // 通知等待连接的 Promise
           for (const resolver of this.connectionResolvers) {
@@ -87,12 +105,14 @@ export class ExtensionBridge {
           this.connectionResolvers = []
 
           ws.on('message', (data: any) => {
-            this.handleMessage(data.toString())
+            this.handleMessage(ws, data.toString())
           })
 
           ws.on('close', () => {
-            if (!this.silent) console.error('[Bridge] Extension disconnected')
-            this.client = null
+            if (this.clients.get(slot) === ws) {
+              this.clients.delete(slot)
+              if (!this.silent) console.error(`[Bridge] Extension disconnected (slot=${slot === ExtensionBridge.LEGACY ? 'legacy' : 'user'}, sessions=${this.clients.size})`)
+            }
           })
 
           ws.on('error', (error: Error) => {
@@ -126,12 +146,25 @@ export class ExtensionBridge {
           return
         }
 
-        if (req.method === 'GET' && req.url === '/status') {
+        if (req.method === 'GET' && req.url && req.url.split('?')[0] === '/status') {
+          let perToken = ''
+          try {
+            perToken = (new URL(req.url, 'http://localhost').searchParams.get('token') || '').trim()
+          } catch { /* ignore */ }
           res.writeHead(200, { 'Content-Type': 'application/json' })
-          res.end(JSON.stringify({
-            connected: this.isConnected(),
-            mode: 'primary'
-          }))
+          if (perToken) {
+            const ws = this.clients.get(perToken)
+            res.end(JSON.stringify({
+              connected: !!ws && ws.readyState === WS_OPEN,
+              mode: 'primary'
+            }))
+          } else {
+            res.end(JSON.stringify({
+              connected: this.isConnected(),
+              sessions: this.clients.size,
+              mode: 'primary'
+            }))
+          }
           return
         }
 
@@ -140,8 +173,8 @@ export class ExtensionBridge {
           req.on('data', chunk => body += chunk)
           req.on('end', async () => {
             try {
-              const { method, params } = JSON.parse(body)
-              const result = await this.requestInternal(method, params)
+              const { method, params, token } = JSON.parse(body)
+              const result = await this.requestInternal(method, params, typeof token === 'string' ? token : undefined)
               res.writeHead(200, { 'Content-Type': 'application/json' })
               res.end(JSON.stringify({ result }))
             } catch (error) {
@@ -191,11 +224,14 @@ export class ExtensionBridge {
   }
 
   /**
-   * 检查 Extension 是否已连接
+   * 检查 Extension 是否已连接（任一会话在线即 true）
    */
   isConnected(): boolean {
     if (this.isServerMode) {
-      return this.client !== null && this.client.readyState === WS_OPEN
+      for (const ws of this.clients.values()) {
+        if (ws.readyState === WS_OPEN) return true
+      }
+      return false
     } else {
       // SECONDARY 模式：无法同步检查，需要用 checkPrimaryHealth 异步验证
       return false
@@ -207,8 +243,8 @@ export class ExtensionBridge {
    */
   waitForConnection(timeoutMs: number = 60000): Promise<void> {
     if (this.isServerMode) {
-      // PRIMARY 模式：等待扩展 WebSocket 连接
-      if (this.client !== null && this.client.readyState === WS_OPEN) {
+      // PRIMARY 模式：等待任一扩展 WebSocket 连接
+      if (this.isConnected()) {
         return Promise.resolve()
       }
 
@@ -262,7 +298,7 @@ export class ExtensionBridge {
                 return
               }
 
-              if (this.client && this.client.readyState === WS_OPEN) {
+              if (this.isConnected()) {
                 resolve()
                 return
               }
@@ -335,11 +371,11 @@ export class ExtensionBridge {
   /**
    * 发送请求到 Extension 并等待响应
    */
-  async request<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+  async request<T = unknown>(method: string, params?: Record<string, unknown>, token?: string): Promise<T> {
     if (this.isServerMode) {
-      return this.requestInternal<T>(method, params)
+      return this.requestInternal<T>(method, params, token)
     } else {
-      return this.requestViaSecondary<T>(method, params)
+      return this.requestViaSecondary<T>(method, params, token)
     }
   }
 
@@ -349,6 +385,7 @@ export class ExtensionBridge {
   private async requestViaSecondary<T = unknown>(
     method: string,
     params?: Record<string, unknown>,
+    token?: string,
     maxRetries: number = 3
   ): Promise<T> {
     let lastError: Error | null = null
@@ -356,7 +393,7 @@ export class ExtensionBridge {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       // 如果已经升级为 PRIMARY，直接走 internal
       if (this.isServerMode) {
-        return this.requestInternal<T>(method, params)
+        return this.requestInternal<T>(method, params, token)
       }
 
       // 重试前等待（首次不等）
@@ -375,11 +412,11 @@ export class ExtensionBridge {
           const promoted = await this.tryPromote()
           if (promoted) {
             // 等 Extension 重新连接（温热重连应该很快）
-            if (!this.client || this.client.readyState !== WS_OPEN) {
+            if (!this.isConnected()) {
               if (!this.silent) console.error('[Bridge] Waiting for Extension to reconnect...')
               await this.waitForConnection(30000)
             }
-            return this.requestInternal<T>(method, params)
+            return this.requestInternal<T>(method, params, token)
           }
         }
         lastError = new Error(health.error || 'Primary instance not available.')
@@ -388,7 +425,7 @@ export class ExtensionBridge {
 
       // 转发请求
       try {
-        return await this.requestViaHttp<T>(method, params)
+        return await this.requestViaHttp<T>(method, params, token)
       } catch (error) {
         lastError = error as Error
       }
@@ -415,18 +452,28 @@ export class ExtensionBridge {
   }
 
   /**
-   * 直接通过 WebSocket 发送请求（服务器模式）
+   * 直接通过 WebSocket 发送请求（服务器模式）。
+   * token 指定目标会话槽；缺省/全局 token → legacy 槽。
+   * 下发消息携带该会话自己的 token（legacy 槽回全局 token），
+   * 供插件端 mcpToken 校验——每用户会话因此互相隔离。
    */
-  private async requestInternal<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
-    if (!this.client || this.client.readyState !== WS_OPEN) {
-      throw new Error('Extension not connected. Please ensure the Chrome extension is running.')
+  private async requestInternal<T = unknown>(method: string, params?: Record<string, unknown>, token?: string): Promise<T> {
+    const slot = (!token || token === this.token) ? ExtensionBridge.LEGACY : token
+    const ws = this.clients.get(slot)
+    if (!ws || ws.readyState !== WS_OPEN) {
+      throw new Error(
+        slot === ExtensionBridge.LEGACY
+          ? 'Extension not connected. Please ensure the Chrome extension is running.'
+          : 'Extension not connected for this account (no bridge session). 请打开插件面板重连，或更新插件到 v2.7.7+'
+      )
     }
 
+    const echoToken = slot === ExtensionBridge.LEGACY ? this.token : slot
     const id = this.generateId()
     const message: RequestMessage = {
       id,
       method,
-      token: this.token,  // 发送 token 供插件端验证
+      token: echoToken,
       params
     }
 
@@ -438,16 +485,16 @@ export class ExtensionBridge {
 
       this.pendingRequests.set(id, { resolve: resolve as (value: unknown) => void, reject, timeout })
 
-      this.client!.send(JSON.stringify(message))
+      ws.send(JSON.stringify(message))
     })
   }
 
   /**
    * 通过 HTTP API 转发请求（客户端模式）
    */
-  private requestViaHttp<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T> {
+  private requestViaHttp<T = unknown>(method: string, params?: Record<string, unknown>, token?: string): Promise<T> {
     return new Promise((resolve, reject) => {
-      const data = JSON.stringify({ method, params })
+      const data = JSON.stringify({ method, params, token })
       const options = {
         hostname: 'localhost',
         port: this.port + 1,
@@ -494,16 +541,16 @@ export class ExtensionBridge {
   }
 
   /**
-   * 处理来自 Extension 的消息
+   * 处理来自 Extension 的消息（ws 为消息来源会话，ping 需原路回包）
    */
-  private handleMessage(data: string): void {
+  private handleMessage(ws: any, data: string): void {
     try {
       const message = JSON.parse(data) as ResponseMessage & { method?: string }
 
       // 插件心跳：静默回 pong（保持双方 WS 活跃，无 pending 需求）
       if (message.method === 'ping') {
         try {
-          this.client?.send(JSON.stringify({ id: message.id, result: 'pong' }))
+          if (ws.readyState === WS_OPEN) ws.send(JSON.stringify({ id: message.id, result: 'pong' }))
         } catch {
           // 发送失败说明连接将关闭，交给 close 事件处理
         }

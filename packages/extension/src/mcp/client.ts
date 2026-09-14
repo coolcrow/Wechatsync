@@ -121,7 +121,11 @@ class McpClient {
     logger.debug(`Connecting to ${this.serverUrl} (attempt ${this.reconnectAttempts + 1})`)
 
     try {
-      this.ws = new WebSocket(this.serverUrl)
+      // 连接 URL 携带 token——桥接按 token 建立/路由每用户专属会话槽
+      const url = this.token
+        ? `${this.serverUrl}${this.serverUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(this.token)}`
+        : this.serverUrl
+      this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
         logger.debug('Connected to MCP Server')
