@@ -11,15 +11,25 @@ REPO_ROOT="$(cd "$EXT_DIR/../.." && pwd)"
 PUBLISHER_REPO="${PUBLISHER_REPO:-/Users/smilerz/PycharmProjects/weixin-article-publisher}"
 
 DRY_RUN=0
-if [ "${1:-}" = "--dry-run" ]; then DRY_RUN=1; shift; fi
+VERSION_ARG=""
+NOTES=()
+# 参数循环解析：--dry-run 任意位置生效；未知 -- 开头参数直接报错
+# （历史事故：--dry-run 放在版本号后会被当成更新说明写进 changelog 并真发版）
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run) DRY_RUN=1 ;;
+    --*) echo "❌ 未知参数: $1（支持的开关仅 --dry-run）" >&2; exit 2 ;;
+    *) if [ -z "$VERSION_ARG" ]; then VERSION_ARG="$1"; else NOTES+=("$1"); fi ;;
+  esac
+  shift
+done
+set -- "$VERSION_ARG"
 
 CUR="$(grep -o '"version": "[^"]*"' "$EXT_DIR/manifest.json" | head -1 | cut -d'"' -f4)"
-NOTES=()
 if [ $# -ge 1 ] && [[ "$1" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  NEW="$1"; shift; NOTES=("$@")
+  NEW="$1"; shift
 else
   NEW="$(python3 -c "a,b,c='$CUR'.split('.'); print(f'{a}.{b}.{int(c)+1}')")"
-  NOTES=("$@")
 fi
 echo "▶ 版本: $CUR → $NEW"
 

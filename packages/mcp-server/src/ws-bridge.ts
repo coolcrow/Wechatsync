@@ -7,6 +7,7 @@
  */
 import { WebSocketServer, WebSocket } from 'ws'
 import http from 'http'
+import crypto from 'crypto'
 import type { RequestMessage, ResponseMessage } from './types.js'
 
 // WebSocket 状态常量 (readyState: 1 = OPEN)
@@ -30,6 +31,25 @@ export class ExtensionBridge {
 
   // 安全验证 token（从环境变量读取，优先使用 WECHATSYNC_TOKEN）
   private token: string = process.env.WECHATSYNC_TOKEN || process.env.MCP_TOKEN || ''
+
+  // 每用户 wsu token 的 HMAC 校验密钥（与后端 WS_TOKEN_SECRET 同源）；空则跳过校验（本地/CLI）
+  private wsPepper: string = process.env.WS_TOKEN_SECRET || ''
+  // /request 共享密钥强制开关（生产置 REQUIRE_BRIDGE_AUTH=1）
+  private requireBridgeAuth: boolean = process.env.REQUIRE_BRIDGE_AUTH === '1'
+  // legacy 槽开关（默认开，过渡期结束后置 ALLOW_LEGACY=0）
+  private allowLegacy: boolean = process.env.ALLOW_LEGACY !== '0'
+  private maxSessions: number = parseInt(process.env.MAX_SESSIONS || '50', 10)
+
+  /**
+   * 校验每用户 token：wsu-<uid>-<hmac_sha256(wsPepper, uid) 前 32 hex>
+   */
+  private isValidUserToken(t: string): boolean {
+    const m = /^wsu-(\d{1,10})-([0-9a-f]{32})$/.exec(t)
+    if (!m) return false
+    const digest = crypto.createHmac('sha256', this.wsPepper)
+      .update(m[1]).digest('hex').slice(0, 32)
+    return digest === m[2]
+  }
 
   // 是否静默模式（CLI 使用时不输出日志）
   private silent: boolean = false
@@ -86,9 +106,29 @@ export class ExtensionBridge {
             presented = (new URL(req.url, 'http://localhost').searchParams.get('token') || '')
               .trim().slice(0, 128)
           } catch { /* ignore */ }
-          const slot = (!presented || presented === this.token)
-            ? ExtensionBridge.LEGACY
-            : presented
+
+          let slot: string
+          if (!presented || presented === this.token) {
+            if (!this.allowLegacy) {
+              if (!this.silent) console.error('[Bridge] Rejected legacy connection (ALLOW_LEGACY=0)')
+              ws.close(1008, 'legacy connections disabled')
+              return
+            }
+            slot = ExtensionBridge.LEGACY
+          } else {
+            // 握手校验：伪造 token 不得占用槽位（匿名连接踢 legacy / 截取内容的攻击面）
+            if (this.wsPepper && !this.isValidUserToken(presented)) {
+              if (!this.silent) console.error('[Bridge] Rejected connection: invalid wsu token')
+              ws.close(1008, 'invalid token')
+              return
+            }
+            if (this.clients.size >= this.maxSessions && !this.clients.has(presented)) {
+              if (!this.silent) console.error(`[Bridge] Rejected connection: session cap ${this.maxSessions}`)
+              ws.close(1013, 'too many sessions')
+              return
+            }
+            slot = presented
+          }
           const stale = this.clients.get(slot)
           if (stale && stale !== ws && stale.readyState === WS_OPEN) {
             try { stale.close() } catch { /* ignore */ }
@@ -135,14 +175,27 @@ export class ExtensionBridge {
   private startHttpApi(): Promise<void> {
     return new Promise((resolve, reject) => {
       this.httpServer = http.createServer(async (req, res) => {
-        // CORS headers
-        res.setHeader('Access-Control-Allow-Origin', '*')
-        res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-
-        if (req.method === 'OPTIONS') {
-          res.writeHead(200)
-          res.end()
+        // 无 CORS 头：本 API 仅服务端到服务端；浏览器跨域读取本就不该被允许
+        // （注意 CORS 挡不住 simple request 的执行，真正的防线是下方共享密钥）
+        if (req.method === 'POST' && req.url === '/request') {
+          if (this.requireBridgeAuth && req.headers['x-bridge-token'] !== this.token) {
+            res.writeHead(401, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ error: 'unauthorized: X-Bridge-Token missing or invalid' }))
+            return
+          }
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', async () => {
+            try {
+              const { method, params, token } = JSON.parse(body)
+              const result = await this.requestInternal(method, params, typeof token === 'string' ? token : undefined)
+              res.writeHead(200, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ result }))
+            } catch (error) {
+              res.writeHead(500, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ error: (error as Error).message }))
+            }
+          })
           return
         }
 
@@ -165,23 +218,6 @@ export class ExtensionBridge {
               mode: 'primary'
             }))
           }
-          return
-        }
-
-        if (req.method === 'POST' && req.url === '/request') {
-          let body = ''
-          req.on('data', chunk => body += chunk)
-          req.on('end', async () => {
-            try {
-              const { method, params, token } = JSON.parse(body)
-              const result = await this.requestInternal(method, params, typeof token === 'string' ? token : undefined)
-              res.writeHead(200, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ result }))
-            } catch (error) {
-              res.writeHead(500, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ error: (error as Error).message }))
-            }
-          })
           return
         }
 

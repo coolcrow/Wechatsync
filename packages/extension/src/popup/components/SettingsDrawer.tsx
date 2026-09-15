@@ -427,7 +427,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                     <input
                       value={miaobiUser}
                       onChange={(e) => setMiaobiUser(e.target.value)}
-                      placeholder="用户名（管理台登录账号）"
+                      placeholder="用户名（工作台登录账号）"
                       className="w-full text-sm px-2.5 py-1.5 rounded-md border bg-background focus:outline-none focus:ring-1"
                       style={{ borderColor: 'hsl(var(--border))' }}
                       autoComplete="username"
