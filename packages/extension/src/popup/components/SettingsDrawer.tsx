@@ -11,6 +11,7 @@ interface SettingsDrawerProps {
 interface McpStatus {
   enabled: boolean
   connected: boolean
+  authExpired?: boolean
   token?: string
   serverUrl?: string
 }
@@ -126,6 +127,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         setMcpStatus({
           enabled: response.enabled ?? false,
           connected: response.connected ?? false,
+          authExpired: response.authExpired ?? false,
           token: response.token,
           serverUrl: response.serverUrl,
         })
@@ -265,7 +267,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     const interval = setInterval(() => {
       chrome.runtime.sendMessage({ type: 'MCP_STATUS' }, (response) => {
         if (response && !response.error) {
-          setMcpStatus(prev => ({ ...prev, connected: response.connected ?? false }))
+          setMcpStatus(prev => ({ ...prev, connected: response.connected ?? false, authExpired: response.authExpired ?? false }))
         }
       })
     }, 3000)
@@ -369,19 +371,28 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             <h3 className="text-sm font-medium text-muted-foreground">同步桥接</h3>
 
             <div className="flex items-center justify-between p-3 border rounded-lg bg-card">
-              <div className="flex items-center gap-2">
-                {mcpStatus.connected ? (
-                  <PlugZap className="w-5 h-5 text-green-500" />
-                ) : (
-                  <Plug className="w-5 h-5 text-muted-foreground" />
-                )}
+                <div className="flex items-center gap-2">
+                  {mcpStatus.connected ? (
+                    <PlugZap className="w-5 h-5 text-green-500" />
+                  ) : mcpStatus.authExpired ? (
+                    <Plug className="w-5 h-5 text-amber-500" />
+                  ) : (
+                    <Plug className="w-5 h-5 text-muted-foreground" />
+                  )}
                 <div>
                   <p className="text-sm font-medium">CLI / MCP 连接</p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className={cn(
+                    'text-xs',
+                    mcpStatus.enabled && !mcpStatus.connected && mcpStatus.authExpired
+                      ? 'text-amber-600 font-medium'
+                      : 'text-muted-foreground'
+                  )}>
                     {mcpStatus.enabled
                       ? mcpStatus.connected
                         ? '已连接'
-                        : '等待连接...'
+                        : mcpStatus.authExpired
+                          ? '登录已过期，请在下方重新登录妙笔账号'
+                          : '等待连接...'
                       : '未启用'}
                   </p>
                 </div>

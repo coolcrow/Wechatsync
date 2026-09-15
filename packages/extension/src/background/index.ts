@@ -748,11 +748,12 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
     }
 
     case 'MCP_STATUS': {
-      const storage = await chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'mcpServerUrl'])
+      const storage = await chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'mcpServerUrl', 'mcpAuthExpired'])
       const mcpStatus = getMcpStatus()
       return {
         enabled: storage.mcpEnabled ?? false,
         connected: mcpStatus.connected,
+        authExpired: storage.mcpAuthExpired ?? false,
         token: storage.mcpToken,  // 返回 token 供 MCP Server 使用
         serverUrl: storage.mcpServerUrl || '',
       }

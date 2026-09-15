@@ -49,6 +49,9 @@ class McpClient {
   // 安全验证 token
   private token: string | null = null
 
+  // 桥接以 close code 1008 拒绝 token（轮换后旧凭据失效）——置位后停止重连，等重新登录换新 token
+  private authExpired = false
+
   // 温热/冷却双阶段重连配置
   private reconnectAttempts = 0
   private lastConnectedAt = 0 // 上次成功连接的时间戳
@@ -72,6 +75,10 @@ class McpClient {
    */
   setToken(token: string): void {
     this.token = token
+    if (this.authExpired) {
+      this.authExpired = false
+      chrome.storage.local.set({ mcpAuthExpired: false }).catch(() => {})
+    }
     logger.debug('Token set')
   }
 
@@ -101,6 +108,10 @@ class McpClient {
    * 连接到 MCP Server
    */
   connect(): void {
+    if (this.authExpired) {
+      logger.debug('Auth expired (token rejected 1008), skip connect until re-login')
+      return
+    }
     // 清理旧连接
     if (this.ws) {
       if (this.ws.readyState === WebSocket.OPEN) {
@@ -131,6 +142,10 @@ class McpClient {
         logger.debug('Connected to MCP Server')
         this.reconnectAttempts = 0 // 重置重连计数
         this.lastConnectedAt = Date.now() // 记录连接时间
+        if (this.authExpired) {
+          this.authExpired = false
+          chrome.storage.local.set({ mcpAuthExpired: false }).catch(() => {})
+        }
         if (this.reconnectTimer) {
           clearTimeout(this.reconnectTimer)
           this.reconnectTimer = null
@@ -142,8 +157,14 @@ class McpClient {
       }
 
       this.ws.onclose = (event) => {
-        logger.debug(`Disconnected (code: ${event.code}), scheduling reconnect...`)
         this.ws = null
+        if (event.code === 1008) {
+          this.authExpired = true
+          chrome.storage.local.set({ mcpAuthExpired: true }).catch(() => {})
+          logger.error('Token rejected by bridge (1008): re-login required')
+          return
+        }
+        logger.debug(`Disconnected (code: ${event.code}), scheduling reconnect...`)
         this.scheduleReconnect()
       }
 
