@@ -24,6 +24,17 @@ const SENSITIVE_API_WHITELIST = [
   'http://localhost:8080',
 ];
 
+
+// 扩展重载/更新后，旧页面残留脚本访问 chrome.runtime 会抛
+// "Extension context invalidated"——入口统一守卫，失效即静默退出
+function runtimeAlive(): boolean {
+  try {
+    return !!(chrome.runtime && chrome.runtime.id)
+  } catch {
+    return false
+  }
+}
+
 // 当前同步任务 ID（用于过滤消息）
 let currentSyncId: string | null = null;
 
@@ -146,6 +157,7 @@ chrome.runtime.onMessage.addListener((message, _sender, _sendResponse) => {
  * 监听来自页面的消息
  */
 window.addEventListener('message', async (evt) => {
+  if (!runtimeAlive()) return
   try {
     const action = JSON.parse(evt.data);
     if (!action.method) return;

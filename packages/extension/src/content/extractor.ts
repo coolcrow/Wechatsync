@@ -20,6 +20,17 @@ import { createSyncFab } from '../lib/fab'
 
 const logger = createLogger('Extractor')
 
+/** 扩展重载/更新后旧页面残留脚本守卫——上下文失效时不再触达 chrome.runtime */
+function runtimeAlive(): boolean {
+  try {
+    return !!(chrome.runtime && chrome.runtime.id)
+  } catch {
+    return false
+  }
+}
+
+
+
 interface ExtractedArticle {
   title: string
   markdown: string   // Markdown 格式（主要）
@@ -910,7 +921,7 @@ function injectFloatingButton() {
   const btn = createSyncFab({
     onClick: () => {
       pendingLoading = showLoading()
-      chrome.runtime.sendMessage({ type: 'TRIGGER_OPEN_EDITOR' })
+      if (runtimeAlive()) chrome.runtime.sendMessage({ type: 'TRIGGER_OPEN_EDITOR' })
     },
   })
   btn.id = 'wechatsync-floating-btn'
@@ -1118,6 +1129,7 @@ window.addEventListener('message', async (event) => {
       const platforms: string[] = data.platforms || []
 
       // 从 background 获取各平台的预处理配置
+      if (!runtimeAlive()) return
       const configResponse = await chrome.runtime.sendMessage({
         type: 'GET_PREPROCESS_CONFIGS',
         platforms,
@@ -1130,7 +1142,7 @@ window.addEventListener('message', async (event) => {
 
       logger.debug('Preprocessed contents for platforms:', Object.keys(platformContents))
 
-      chrome.runtime.sendMessage({
+      if (runtimeAlive()) chrome.runtime.sendMessage({
         type: 'START_SYNC_FROM_EDITOR',
         article: {
           ...data.article,

@@ -42,6 +42,22 @@ sed -i '' "s/\"version\": \"$CUR\"/\"version\": \"$NEW\"/" "$EXT_DIR/manifest.js
 echo "▶ tsc + vite build…"
 ( cd "$EXT_DIR" && npx tsc && npx vite build >/dev/null 2>&1 ) || { echo "❌ 构建失败"; exit 1; }
 
+# 2.5) 生成 loader 定向静默：扩展重载/更新后旧页面残留 loader 的
+#      "Extension context invalidated" 是无害暂态——只静默这一种，其余照报
+python3 - "$EXT_DIR" <<'PYEOF'
+import pathlib, re, sys
+root = pathlib.Path(sys.argv[1])
+for pat in ("dist/*loader*.js", "dist/assets/*loader*.js"):
+    for f in root.glob(pat):
+        s = f.read_text(encoding="utf-8")
+        s2 = s.replace(
+            "})().catch(console.error);",
+            '})().catch((e)=>{if(String(e&&e.message||e).includes("Extension context invalidated"))return;console.error(e);});')
+        if s2 != s:
+            f.write_text(s2, encoding="utf-8")
+            print(f"  loader 静默: {f.name}")
+PYEOF
+
 # 3) 产物版本校验
 DIST_VER="$(grep -o '"version": "[^"]*"' "$EXT_DIR/dist/manifest.json" | head -1 | cut -d'"' -f4)"
 [ "$DIST_VER" = "$NEW" ] || { echo "❌ dist 版本 $DIST_VER ≠ $NEW"; exit 1; }
