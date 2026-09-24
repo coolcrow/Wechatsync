@@ -1302,12 +1302,16 @@ preCheckPlatformsAuth()
 chrome.alarms.create('daily_growth_metrics', { periodInMinutes: 24 * 60 })
 // 设置远程配置定期拉取（每 6 小时）
 chrome.alarms.create('remote_config_fetch', { periodInMinutes: 6 * 60 })
+chrome.alarms.create('plugin_update_check', { periodInMinutes: 24 * 60 })
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === 'daily_growth_metrics') {
     trackGrowthMetrics().catch(() => {})
   }
   if (alarm.name === 'remote_config_fetch') {
     fetchRemoteConfig().catch(() => {})
+  }
+  if (alarm.name === 'plugin_update_check') {
+    import('../lib/update-check').then(m => m.checkPluginUpdate()).catch(() => {})
   }
   if (alarm.name === 'mcp_ws_keepalive') {
     mcpClient.heartbeat()
@@ -1316,6 +1320,9 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // 首次启动时也追踪一次增长指标
 trackGrowthMetrics().catch(() => {})
+
+// 启动即查插件更新（24h 内有缓存则跳过）
+import('../lib/update-check').then(m => m.checkPluginUpdate()).catch(() => {})
 
 // 首次启动时拉取远程配置（带缓存检查）
 fetchConfigIfNeeded().catch(() => {})

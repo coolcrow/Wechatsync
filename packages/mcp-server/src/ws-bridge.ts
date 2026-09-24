@@ -100,11 +100,15 @@ export class ExtensionBridge {
         })
 
         this.wss.on('connection', (ws: any, req: any) => {
-          // 连接 URL 携带 ?token=<每用户 token>；缺省或等于全局 token 归入 legacy 槽
+          // 连接 URL 携带 ?token=<每用户 token>&v=<插件版本>；缺省或等于全局 token 归入 legacy 槽
           let presented = ''
+          let pluginVersion = ''
           try {
-            presented = (new URL(req.url, 'http://localhost').searchParams.get('token') || '')
-              .trim().slice(0, 128)
+            const q = new URL(req.url, 'http://localhost').searchParams
+            presented = (q.get('token') || '').trim().slice(0, 128)
+            // 版本号白名单校验（^数字.数字.数字$，最长 16 位）——Web 端版本门控数据源
+            const rawV = (q.get('v') || '').trim()
+            if (/^\d{1,4}\.\d{1,4}\.\d{1,4}$/.test(rawV)) pluginVersion = rawV.slice(0, 16)
           } catch { /* ignore */ }
 
           let slot: string
@@ -134,8 +138,9 @@ export class ExtensionBridge {
             try { stale.close() } catch { /* ignore */ }
           }
           this.clients.set(slot, ws)
+          ;(ws as any).pluginVersion = pluginVersion
           if (!this.silent) {
-            console.error(`[Bridge] Extension connected (slot=${slot === ExtensionBridge.LEGACY ? 'legacy' : 'user'}, sessions=${this.clients.size})`)
+            console.error(`[Bridge] Extension connected (slot=${slot === ExtensionBridge.LEGACY ? 'legacy' : 'user'}, v=${pluginVersion || '?'}, sessions=${this.clients.size})`)
           }
 
           // 通知等待连接的 Promise
@@ -209,6 +214,7 @@ export class ExtensionBridge {
             const ws = this.clients.get(perToken)
             res.end(JSON.stringify({
               connected: !!ws && ws.readyState === WS_OPEN,
+              version: (ws && ws.readyState === WS_OPEN && ws.pluginVersion) || null,
               mode: 'primary'
             }))
           } else {

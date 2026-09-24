@@ -132,10 +132,11 @@ class McpClient {
     logger.debug(`Connecting to ${this.serverUrl} (attempt ${this.reconnectAttempts + 1})`)
 
     try {
-      // 连接 URL 携带 token——桥接按 token 建立/路由每用户专属会话槽
-      const url = this.token
-        ? `${this.serverUrl}${this.serverUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(this.token)}`
-        : this.serverUrl
+      // 连接 URL 携带 token（每用户会话槽）+ v（插件版本——Web 端版本门控数据源）
+      const ver = chrome.runtime.getManifest().version
+      const parts = [`v=${encodeURIComponent(ver)}`]
+      if (this.token) parts.unshift(`token=${encodeURIComponent(this.token)}`)
+      const url = `${this.serverUrl}${this.serverUrl.includes('?') ? '&' : '?'}${parts.join('&')}`
       this.ws = new WebSocket(url)
 
       this.ws.onopen = () => {
