@@ -27,6 +27,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [mcpStatus, setMcpStatus] = useState<McpStatus>({ enabled: false, connected: false })
   const [cmsAccounts, setCmsAccounts] = useState<CMSAccount[]>([])
   const [loading, setLoading] = useState(false)
+  const [mcpHint, setMcpHint] = useState('')
   const [floatingButtonEnabled, setFloatingButtonEnabled] = useState(false)
   const [serverUrlInput, setServerUrlInput] = useState('')
   const [miaobiBusy, setMiaobiBusy] = useState(false)
@@ -298,6 +299,10 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           connected: false,
           token: response.token,  // 保存返回的 token
         }))
+      } else if (response?.reason) {
+        // 未登录等前置条件不满足——引导而非静默失败
+        setMcpHint(response.reason)
+        setTimeout(() => setMcpHint(''), 4000)
       }
     })
   }
@@ -387,13 +392,15 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                       ? 'text-amber-600 font-medium'
                       : 'text-muted-foreground'
                   )}>
-                    {mcpStatus.enabled
+                    {mcpHint
+                      ? mcpHint
+                      : mcpStatus.enabled
                       ? mcpStatus.connected
                         ? '已连接'
                         : mcpStatus.authExpired
                           ? '登录已过期，请在下方重新登录妙笔账号'
                           : '等待连接...'
-                      : '未启用'}
+                      : '未启用——请先在下方登录妙笔账号'}
                   </p>
                 </div>
               </div>

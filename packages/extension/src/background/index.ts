@@ -695,11 +695,15 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
     }
 
     case 'MCP_ENABLE': {
-      // 检查是否已有 token，没有才生成新的
+      // 妙笔桥接要求 wsu-<uid>-<hmac> 签名 token（登录后从服务器获取）——
+      // 上游的随机 UUID 本地 token 会被桥接 1008 拒绝陷入假过期循环
       const storage = await chrome.storage.local.get(['mcpToken', 'mcpServerUrl'])
-      const token = storage.mcpToken || crypto.randomUUID()
-      await chrome.storage.local.set({ mcpEnabled: true, mcpToken: token })
-      // 设置 token、服务器地址并启动客户端
+      const token = storage.mcpToken || ''
+      if (!token.startsWith('wsu-')) {
+        logger.warn('MCP enable rejected: no valid bridge token (login required)')
+        return { success: false, reason: '请先在下方登录妙笔账号——登录后同步自动开启' }
+      }
+      await chrome.storage.local.set({ mcpEnabled: true })
       mcpClient.setToken(token)
       if (storage.mcpServerUrl) {
         mcpClient.setServerUrl(storage.mcpServerUrl)
@@ -707,7 +711,6 @@ async function handleMessage(message: MessageAction, sender?: chrome.runtime.Mes
       startMcpClient()
       logger.info(' MCP enabled')
       trackMcpUsage('enable').catch(() => {})
-      // 追踪 MCP 用户里程碑
       trackMilestone('mcp_user').catch(() => {})
       return { success: true, token }
     }
