@@ -74,10 +74,16 @@ class McpClient {
    * 设置安全验证 token
    */
   setToken(token: string): void {
+    const changed = this.token !== token
     this.token = token
     if (this.authExpired) {
       this.authExpired = false
       chrome.storage.local.set({ mcpAuthExpired: false }).catch(() => {})
+    }
+    // 账号切换（token 变化）且连接存活——旧连接属旧账号桥接槽，须断开重连
+    if (changed && this.isConnected()) {
+      logger.info('Token changed while connected; reconnecting')
+      this.disconnect()
     }
     logger.debug('Token set')
   }

@@ -1256,17 +1256,15 @@ chrome.runtime.onInstalled.addListener(async details => {
 async function initMcpIfEnabled() {
   const storage = await chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'mcpServerUrl'])
   if (storage.mcpEnabled) {
-    if (storage.mcpToken) {
+    // 妙笔桥接只接受 wsu- 签名 token——上游 UUID 或空值会导致 1008 假过期循环
+    if (storage.mcpToken && storage.mcpToken.startsWith('wsu-')) {
       mcpClient.setToken(storage.mcpToken)
       logger.info(' Starting MCP client with existing token...')
     } else {
-      // 没有 token，生成新的
-      const token = crypto.randomUUID()
-      await chrome.storage.local.set({ mcpToken: token })
-      mcpClient.setToken(token)
-      logger.info(' Starting MCP client with new token...')
+      logger.warn(' MCP enabled but no valid wsu- token; waiting for login')
+      await chrome.storage.local.set({ mcpAuthExpired: true })
+      return
     }
-    // 加载自定义服务器地址（支持远程桥接）
     if (storage.mcpServerUrl) {
       mcpClient.setServerUrl(storage.mcpServerUrl)
     }
