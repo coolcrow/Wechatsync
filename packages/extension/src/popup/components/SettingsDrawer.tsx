@@ -107,8 +107,17 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       await chrome.storage.local.set({ miaobiUser: username })
       setMiaobiPass('')
       setMiaobiAccount(username)
-      setMiaobiMsg('配置成功，扩展重启中…')
-      setTimeout(() => chrome.runtime.reload(), 800)
+      setMiaobiMsg('配置成功，正在连接…')
+      // 不再 chrome.runtime.reload()——重载杀掉刚建立的 WS 连接且 SW 冷启动
+      // 后 initMcpIfEnabled 的重连不可靠（评审期实证）；原地启动 MCP 客户端：
+      chrome.runtime.sendMessage({ type: 'MCP_ENABLE' }, (resp) => {
+        if (resp?.success) {
+          setMcpStatus(prev => ({ ...prev, enabled: true, connected: false }))
+          setMiaobiMsg('配置成功，同步已开启')
+        } else {
+          setMiaobiMsg(resp?.reason || '配置成功，但同步启动失败——请手动开启上方开关')
+        }
+      })
     } catch (e) {
       setMiaobiMsg(`配置失败: ${(e as Error).message}`)
     } finally {
