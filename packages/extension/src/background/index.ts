@@ -26,7 +26,6 @@ import {
   trackGrowthMetrics,
 } from '../lib/analytics'
 import { checkSyncFrequency, recordSync } from '../lib/rate-limit'
-import { checkForUpdates, isUpdateDismissed } from '../lib/version-check'
 import { fetchRemoteConfig, fetchConfigIfNeeded } from '../lib/remote-config'
 
 const logger = createLogger('Background')
@@ -1327,20 +1326,8 @@ import('../lib/update-check').then(m => m.checkPluginUpdate()).catch(() => {})
 // 首次启动时拉取远程配置（带缓存检查）
 fetchConfigIfNeeded().catch(() => {})
 
-// 检查版本更新（用于 ZIP 安装用户）
-// 如有新版本，在扩展图标上显示 badge 提醒
-checkForUpdates().then(async (result) => {
-  if (result.hasUpdate && result.info) {
-    // 检查用户是否已忽略此版本
-    const isDismissed = await isUpdateDismissed(result.info.version)
-    if (!isDismissed) {
-      // 显示更新 badge
-      await chrome.action.setBadgeText({ text: 'NEW' })
-      await chrome.action.setBadgeBackgroundColor({ color: BADGE_COLORS.update })
-      logger.info('Update badge shown for version:', result.info.version)
-    }
-  }
-}).catch(() => {})
+// （旧版上游 version-check 已移除——评审 #16：紫色 NEW 徽标会踩掉同步 ✓ 与
+// 更新提示 ●，且数据源是上游作者可控的 OSS 桶；统一走 lib/update-check 自家通道）
 
 /**
  * 清理遗留的动态规则（防止扩展崩溃后规则残留影响其他网站）

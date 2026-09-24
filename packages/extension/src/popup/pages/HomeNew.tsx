@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Settings, Plus, Clock, X, Download, Info } from 'lucide-react'
+import { Settings, Plus, Clock, X, Info } from 'lucide-react'
 import { useSyncStore } from '../stores/sync'
 import { SettingsDrawer } from '../components/SettingsDrawer'
 import { SyncDialog } from '@/components/sync-dialog'
@@ -8,7 +8,6 @@ import type { Platform as DialogPlatform } from '@/components/sync-dialog'
 import { cn } from '@/lib/utils'
 import { trackPageView, trackFeatureDiscovery } from '../../lib/analytics'
 import { createLogger } from '../../lib/logger'
-import { getCachedUpdateInfo, dismissUpdate, type UpdateCheckResult } from '../../lib/version-check'
 
 const logger = createLogger('HomeNew')
 
@@ -40,7 +39,6 @@ export function HomeNew() {
   const [rateLimitWarning, setRateLimitWarning] = useState<string | null>(null)
   const [allPlatforms, setAllPlatforms] = useState<DialogPlatform[]>([])
 
-  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null)
   const [floatingEnabled, setFloatingEnabled] = useState(false)
   const [isFirstSync, setIsFirstSync] = useState(false)
   const [showShareTip, setShowShareTip] = useState(false)
@@ -69,10 +67,6 @@ export function HomeNew() {
           setShowShareTip(true)
         }
       })
-      const cached = await getCachedUpdateInfo()
-      if (cached?.hasUpdate && cached.info) {
-        setUpdateInfo(cached)
-      }
     }
     init()
     trackPageView('home').catch(() => {})
@@ -160,46 +154,6 @@ export function HomeNew() {
           </button>
         </nav>
       </header>
-
-      {/* Version update banner */}
-      {updateInfo?.hasUpdate && updateInfo.info && (
-        <div className="px-4 pt-3">
-          <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                <Download className="w-4 h-4" />
-                <span>新版本 v{updateInfo.info.version} 可用</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <a
-                  href={updateInfo.info.downloadUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 dark:text-blue-400 hover:underline font-medium"
-                >
-                  下载
-                </a>
-                <button
-                  onClick={async () => {
-                    if (updateInfo.info) {
-                      await dismissUpdate(updateInfo.info.version)
-                      chrome.runtime.sendMessage({ type: 'CLEAR_UPDATE_BADGE' }).catch(() => {})
-                      setUpdateInfo(null)
-                    }
-                  }}
-                  className="text-muted-foreground hover:text-foreground"
-                  title="忽略此版本"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            {updateInfo.info.releaseNotes && (
-              <p className="text-xs text-muted-foreground mt-1">{updateInfo.info.releaseNotes}</p>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Share / welcome banner (first time only) */}
       {showShareTip && (

@@ -34,7 +34,7 @@ export async function checkPluginUpdate(force = false): Promise<PluginUpdateInfo
     if (!force && stored && Date.now() - stored.checkedAt < CHECK_INTERVAL_MS) {
       return stored
     }
-    const resp = await fetch(INFO_URL, { cache: 'no-cache' })
+    const resp = await fetch(INFO_URL, { cache: 'no-cache', signal: AbortSignal.timeout(10_000) })
     if (!resp.ok) return stored || null
     const info = await resp.json()
     const latest = String(info.version || '')
