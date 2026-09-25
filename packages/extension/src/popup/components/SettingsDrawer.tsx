@@ -139,25 +139,37 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
     if (!open) return
 
     // MCP 状态
-    chrome.runtime.sendMessage({ type: 'MCP_STATUS' }, (response) => {
-      const lastErr = chrome.runtime.lastError?.message || '无'
-      if (response && !response.error) {
-        setMcpStatus({
-          enabled: response.enabled ?? false,
-          connected: response.connected ?? false,
-          authExpired: response.authExpired ?? false,
-          token: response.token,
-          serverUrl: response.serverUrl,
-        })
-        setServerUrlInput(response.serverUrl || '')
-        chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'miaobiUser'], (s) => {
-          setMcpDebug(`SW: enabled=${response.enabled} conn=${response.connected} err=${response.error || '无'} | `
-            + `lastError=${lastErr} | `
-            + `storage: mcpEnabled=${s.mcpEnabled} token=${(s.mcpToken || '无').slice(0, 15)} user=${s.miaobiUser || '无'}`)
-        })
-      } else {
-        setMcpDebug(`MCP_STATUS 失败: response=${JSON.stringify(response)} | lastError=${lastErr}`)
-      }
+    // 直读 storage（不依赖 SW——SW 死了也能看到真实状态）
+    chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'miaobiUser', 'mcpAuthExpired'], (s) => {
+      const storageLine = `storage: enabled=${s.mcpEnabled} token=${(s.mcpToken || '无').slice(0, 15)} user=${s.miaobiUser || '无'} authExpired=${s.mcpAuthExpired}`
+      setMcpDebug(`${storageLine} | 正在 PING SW…`)
+
+      // PING 探活：SW 是否响应消息
+      chrome.runtime.sendMessage({ type: 'PING' }, (resp) => {
+        const err = chrome.runtime.lastError?.message || '无'
+        if (resp && resp.pong) {
+          setMcpDebug(`${storageLine} | SW响应: ✓ pong`)
+          // SW 活了 → 正式请求 MCP_STATUS
+          chrome.runtime.sendMessage({ type: 'MCP_STATUS' }, (r2) => {
+            const e2 = chrome.runtime.lastError?.message || '无'
+            if (r2 && !r2.error) {
+              setMcpStatus({
+                enabled: r2.enabled ?? false,
+                connected: r2.connected ?? false,
+                authExpired: r2.authExpired ?? false,
+                token: r2.token,
+                serverUrl: r2.serverUrl,
+              })
+              setServerUrlInput(r2.serverUrl || '')
+              setMcpDebug(`${storageLine} | SW: enabled=${r2.enabled} conn=${r2.connected}`)
+            } else {
+              setMcpDebug(`${storageLine} | SW活了但MCP_STATUS失败: ${JSON.stringify(r2)} lastErr=${e2}`)
+            }
+          })
+        } else {
+          setMcpDebug(`${storageLine} | SW不响应: resp=${JSON.stringify(resp)} lastErr=${err}`)
+        }
+      })
     })
 
     // CMS 账户

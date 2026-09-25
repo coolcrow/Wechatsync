@@ -130,6 +130,7 @@ type MessageAction =
   | { type: 'DOWNLOAD_VIDEO'; payload: { videoUrl: string; filename: string } }
   | { type: 'TEST_CMS_CONNECTION'; payload: { type: CMSType; url: string; username: string; password: string } }
   | { type: 'SYNC_TO_CMS'; payload: { accountId: string; article: any } }
+  | { type: 'PING' }
   | { type: 'MCP_ENABLE' }
   | { type: 'MCP_DISABLE' }
   | { type: 'MCP_STATUS' }
@@ -161,6 +162,9 @@ chrome.runtime.onMessage.addListener((message: MessageAction, sender, sendRespon
 
 async function handleMessage(message: MessageAction, sender?: chrome.runtime.MessageSender) {
   switch (message.type) {
+    case 'PING': {
+      return { pong: true, ts: Date.now() }
+    }
     case 'GET_PLATFORMS': {
       await initAdapters()
       const platforms = getAllPlatformMetas()
