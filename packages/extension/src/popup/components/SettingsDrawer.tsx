@@ -110,14 +110,20 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
       setMiaobiMsg('配置成功，正在连接…')
       // 不再 chrome.runtime.reload()——重载杀掉刚建立的 WS 连接且 SW 冷启动
       // 后 initMcpIfEnabled 的重连不可靠（评审期实证）；原地启动 MCP 客户端：
-      chrome.runtime.sendMessage({ type: 'MCP_ENABLE' }, (resp) => {
-        if (resp?.success) {
-          setMcpStatus(prev => ({ ...prev, enabled: true, connected: false }))
-          setMiaobiMsg('配置成功，同步已开启')
-        } else {
-          setMiaobiMsg(resp?.reason || '配置成功，但同步启动失败——请手动开启上方开关')
-        }
-      })
+      const enableMcp = (retry: boolean) => {
+        chrome.runtime.sendMessage({ type: 'MCP_ENABLE' }, (resp) => {
+          if (resp?.success) {
+            setMcpStatus(prev => ({ ...prev, enabled: true, connected: false }))
+            setMiaobiMsg('配置成功，同步已开启')
+          } else if (resp === undefined && retry) {
+            // SW 冷启动中回调丢失——1s 后重试
+            setTimeout(() => enableMcp(false), 1000)
+          } else {
+            setMiaobiMsg(resp?.reason || '配置成功，但同步启动失败——请手动开启上方开关')
+          }
+        })
+      }
+      enableMcp(true)
     } catch (e) {
       setMiaobiMsg(`配置失败: ${(e as Error).message}`)
     } finally {
@@ -142,6 +148,14 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           serverUrl: response.serverUrl,
         })
         setServerUrlInput(response.serverUrl || '')
+        // 诊断：直读 storage 交叉验证 SW 回报
+        chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'miaobiUser'], (s) => {
+          const el = document.getElementById('mcp-debug')
+          if (el) {
+            el.textContent = `SW回报: enabled=${response.enabled} connected=${response.connected} | `
+              + `storage直读: mcpEnabled=${s.mcpEnabled} token=${(s.mcpToken || '').slice(0, 12)}… user=${s.miaobiUser || '无'}`
+          }
+        })
       }
     })
 
@@ -269,15 +283,22 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
 
   // MCP 状态轮询 + 通知 background 加速重连
   useEffect(() => {
-    if (!open || !mcpStatus.enabled) return
+    if (!open) return
 
-    // 通知 background：用户正在关注，加速重连
-    chrome.runtime.sendMessage({ type: 'MCP_WATCH_START' })
+    // 通知 background：用户正在关注，加速重连（仅已启用时）
+    if (mcpStatus.enabled) {
+      chrome.runtime.sendMessage({ type: 'MCP_WATCH_START' })
+    }
 
     const interval = setInterval(() => {
       chrome.runtime.sendMessage({ type: 'MCP_STATUS' }, (response) => {
         if (response && !response.error) {
-          setMcpStatus(prev => ({ ...prev, connected: response.connected ?? false, authExpired: response.authExpired ?? false }))
+          setMcpStatus(prev => ({
+            ...prev,
+            enabled: response.enabled ?? prev.enabled,
+            connected: response.connected ?? false,
+            authExpired: response.authExpired ?? false,
+          }))
         }
       })
     }, 3000)
@@ -395,6 +416,10 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                   )}
                 <div>
                   <p className="text-sm font-medium">CLI / MCP 连接</p>
+                  <details className="text-[10px] text-muted-foreground mt-1">
+                    <summary className="cursor-pointer select-none">调试信息</summary>
+                    <div id="mcp-debug" className="mt-1 font-mono break-all">…</div>
+                  </details>
                   <p className={cn(
                     'text-xs',
                     mcpStatus.enabled && !mcpStatus.connected && mcpStatus.authExpired
