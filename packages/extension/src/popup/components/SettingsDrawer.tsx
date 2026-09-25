@@ -28,6 +28,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
   const [cmsAccounts, setCmsAccounts] = useState<CMSAccount[]>([])
   const [loading, setLoading] = useState(false)
   const [mcpHint, setMcpHint] = useState('')
+  const [mcpDebug, setMcpDebug] = useState('等待 MCP_STATUS 响应…')
   const [floatingButtonEnabled, setFloatingButtonEnabled] = useState(false)
   const [serverUrlInput, setServerUrlInput] = useState('')
   const [miaobiBusy, setMiaobiBusy] = useState(false)
@@ -139,6 +140,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
 
     // MCP 状态
     chrome.runtime.sendMessage({ type: 'MCP_STATUS' }, (response) => {
+      const lastErr = chrome.runtime.lastError?.message || '无'
       if (response && !response.error) {
         setMcpStatus({
           enabled: response.enabled ?? false,
@@ -148,14 +150,13 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
           serverUrl: response.serverUrl,
         })
         setServerUrlInput(response.serverUrl || '')
-        // 诊断：直读 storage 交叉验证 SW 回报
         chrome.storage.local.get(['mcpEnabled', 'mcpToken', 'miaobiUser'], (s) => {
-          const el = document.getElementById('mcp-debug')
-          if (el) {
-            el.textContent = `SW回报: enabled=${response.enabled} connected=${response.connected} | `
-              + `storage直读: mcpEnabled=${s.mcpEnabled} token=${(s.mcpToken || '').slice(0, 12)}… user=${s.miaobiUser || '无'}`
-          }
+          setMcpDebug(`SW: enabled=${response.enabled} conn=${response.connected} err=${response.error || '无'} | `
+            + `lastError=${lastErr} | `
+            + `storage: mcpEnabled=${s.mcpEnabled} token=${(s.mcpToken || '无').slice(0, 15)} user=${s.miaobiUser || '无'}`)
         })
+      } else {
+        setMcpDebug(`MCP_STATUS 失败: response=${JSON.stringify(response)} | lastError=${lastErr}`)
       }
     })
 
@@ -418,7 +419,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
                   <p className="text-sm font-medium">CLI / MCP 连接</p>
                   <details className="text-[10px] text-muted-foreground mt-1">
                     <summary className="cursor-pointer select-none">调试信息</summary>
-                    <div id="mcp-debug" className="mt-1 font-mono break-all">…</div>
+                    <div className="mt-1 font-mono break-all">{mcpDebug}</div>
                   </details>
                   <p className={cn(
                     'text-xs',
