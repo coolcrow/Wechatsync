@@ -104,6 +104,7 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
         mcpEnabled: true,
         mcpToken: bridgeToken,
         mcpServerUrl: MIAOBI_WS,
+        mcpAuthExpired: false,  // SW 可能死了不清——popup 端直接清
       })
       await chrome.storage.local.set({ miaobiUser: username })
       setMiaobiPass('')
@@ -117,8 +118,11 @@ export function SettingsDrawer({ open, onClose }: SettingsDrawerProps) {
             setMcpStatus(prev => ({ ...prev, enabled: true, connected: false }))
             setMiaobiMsg('配置成功，同步已开启')
           } else if (resp === undefined && retry) {
-            // SW 冷启动中回调丢失——1s 后重试
             setTimeout(() => enableMcp(false), 1000)
+          } else if (resp === undefined) {
+            // SW 死了——storage 已写对（mcpEnabled=true），UI 至少反映 storage 真实状态
+            setMcpStatus(prev => ({ ...prev, enabled: true, connected: false, authExpired: false }))
+            setMiaobiMsg('配置已保存（同步将在扩展重载后生效）——请关闭并重新打开浏览器')
           } else {
             setMiaobiMsg(resp?.reason || '配置成功，但同步启动失败——请手动开启上方开关')
           }
