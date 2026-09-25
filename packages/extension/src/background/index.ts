@@ -12,6 +12,7 @@ import {
 import * as wordpressAdapter from '../adapters/cms/wordpress'
 import * as metaweblogAdapter from '../adapters/cms/metaweblog'
 import { startMcpClient, stopMcpClient, getMcpStatus, mcpClient } from '../mcp/client'
+import { checkPluginUpdate } from '../lib/update-check'
 import { createLogger } from '../lib/logger'
 import {
   trackInstall,
@@ -1315,7 +1316,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
     fetchRemoteConfig().catch(() => {})
   }
   if (alarm.name === 'plugin_update_check') {
-    import('../lib/update-check').then(m => m.checkPluginUpdate()).catch(() => {})
+    checkPluginUpdate().catch(() => {})
   }
   if (alarm.name === 'mcp_ws_keepalive') {
     mcpClient.heartbeat()
@@ -1326,7 +1327,7 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 trackGrowthMetrics().catch(() => {})
 
 // 启动即查插件更新（24h 内有缓存则跳过）
-import('../lib/update-check').then(m => m.checkPluginUpdate()).catch(() => {})
+checkPluginUpdate().catch(() => {})
 
 // 首次启动时拉取远程配置（带缓存检查）
 fetchConfigIfNeeded().catch(() => {})
